@@ -1,0 +1,17 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+jobs:
+  release:
+    uses: JDE-Projects/Build-Tools/.github/workflows/release.yml@5a58e725df3d7665c70ddb6164da9297b8fae72a # Build-Tools main (installer support)
+    permissions:
+      id-token: write
+      attestations: write
+      contents: write
+    with:
+      app_name: SimpleFirearmLogbook
+      dist_subfolder: "Simple Firearm Logbook"
+      python_version: "3.14"
+      build_command: "Build_Simple_Firearm_Logbook.bat"
+      app_id: "03849f99-e535-4ae8-aff7-bc442f6a868b"

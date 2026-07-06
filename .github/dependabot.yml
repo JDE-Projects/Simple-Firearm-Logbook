@@ -1,0 +1,13 @@
+# Dependabot opens review-PRs when updates are available for:
+#  - pip: the pinned build deps in requirements.txt
+#  - github-actions: the pinned Build-Tools workflow this repo calls
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
