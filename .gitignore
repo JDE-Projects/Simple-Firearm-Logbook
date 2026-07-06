@@ -2,6 +2,7 @@
 simple_firearm_logbook.db
 photos/
 Debug_Log_*.txt
+*.pref
 
 # Local working files
 status.md
