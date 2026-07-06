@@ -1,0 +1,15 @@
+# Runtime user data (never commit)
+simple_firearm_logbook.db
+photos/
+Debug_Log_*.txt
+
+# Local working files
+status.md
+roadmap.md
+Launch_*.bat
+
+# Build output
+build/
+dist/
+*.spec
+__pycache__/
