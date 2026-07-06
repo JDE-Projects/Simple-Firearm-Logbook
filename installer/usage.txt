@@ -1,0 +1,4 @@
+Getting started:
+1. Launch Simple Firearm Logbook and click Add Firearm to log your first entry - each firearm gets a permanent log number.
+2. Open any entry to add photos, purchase details, and notes, or to record a disposition (sold, traded, etc.).
+3. Use Export for a printable single-firearm HTML or a full zip backup (HTML + CSV + photos).
