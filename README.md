@@ -20,11 +20,11 @@ If you enjoyed this project and would like to buy me a coffee, check out my [Ko-
 - Fully offline: your collection data never leaves the machine.
 
 ## How it works
-- Backend: Python with SQLite (standard library). Data is stored in simple_firearm_logbook.db next to the exe, with photos copied into a photos\ folder alongside it.
+- Backend: Python with SQLite (standard library). Data is stored in `simple_firearm_logbook.db` next to the exe, with photos copied into a `photos\` folder alongside it.
 - Window: pywebview on the Qt backend, UI in simple_firearm_logbook-UI.html.
 
 ## Download and run
-Two ways to get it from the Releases page, pick one:
+Two ways to get it from the [Releases](../../releases) page, pick one:
 - **Installer (recommended):** download `SimpleFirearmLogbook-vX.Y.Z-setup.exe` and
   run it. Installs the app, adds a Start menu shortcut, and can be removed later
   from Add or Remove Programs. Installs just for you by default (no admin); you can
@@ -40,14 +40,14 @@ first time: More info > Run anyway.
 Simple Firearm Logbook doesn't update itself. The bottom bar has a **Check for updates** button that tells you when a newer release is out; when it does, get the new version from the [Releases](../../releases) page the same way you first installed it.
 
 - **Installer:** download the new `SimpleFirearmLogbook-vX.Y.Z-setup.exe` and run it. It installs over your current copy and keeps your logbook database and photos.
-- **Portable .zip:** download and extract the new `SimpleFirearmLogbook-vX.Y.Z.zip`. To keep your logbook database and photos, copy simple_firearm_logbook.db, the photos\ folder, and the .pref file from the old folder into the new one.
+- **Portable .zip:** download and extract the new `SimpleFirearmLogbook-vX.Y.Z.zip`. To keep your logbook database and photos, copy `simple_firearm_logbook.db`, the `photos\` folder, and the `.pref` file from the old folder into the new one.
 
 Everything the app stores lives in the database and photos folder next to the exe, so there's nothing else to carry over.
 
 ## Verify this download (optional)
 This release was built on GitHub from this public source, not on a personal
 machine, and is signed with a build-provenance attestation. To confirm your
-download is genuine, install the GitHub CLI and run:
+download is genuine, install the [GitHub CLI](https://cli.github.com) and run:
 ```
 gh attestation verify SimpleFirearmLogbook-vX.Y.Z.zip \
   --repo JDE-Projects/Simple-Firearm-Logbook \
@@ -59,11 +59,11 @@ pipeline from this repo. You can also check the file against the published
 
 ## Build from source (optional)
 - Python 3 on PATH.
-- pip install -r requirements.txt   (pinned versions; includes PySide6 and pywebview)
-  Keep simple_firearm_logbook.py, simple_firearm_logbook-UI.html, the fonts/
-  folder, the .ico, .png and -splash.png together.
-- Run from source: python simple_firearm_logbook.py
-- Build the .exe: Build_Simple_Firearm_Logbook.bat -> dist\Simple Firearm Logbook\
+- `pip install -r requirements.txt` (pinned versions; includes PySide6 and pywebview)
+  Keep `simple_firearm_logbook.py`, `simple_firearm_logbook-UI.html`, the `fonts/`
+  folder, the `.ico`, `.png` and `-splash.png` together.
+- Run from source: `python simple_firearm_logbook.py`
+- Build the .exe: `Build_Simple_Firearm_Logbook.bat` -> `dist\Simple Firearm Logbook\`
 
 ## Using it
 1. Add a firearm with its make, model, and whatever other details you know.
@@ -79,7 +79,8 @@ pipeline from this repo. You can also check the file against the published
 ## A note on how this was built
 This project was built with AI assistance. The design decisions, feature
 direction, and real-world testing were directed by me. The code was written
-and revised with an AI assistant against that direction.
+and revised with an AI assistant against that direction. Treat it like any
+community tool: review and test it before relying on it.
 
 ## License
 Released under the PolyForm Noncommercial 1.0.0 license. See LICENSE. If the tool bundles
