@@ -26,7 +26,7 @@ from decimal import Decimal, InvalidOperation
 
 import webview
 
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 GITHUB_OWNER = "JDE-Projects"
 GITHUB_REPO = "Simple-Firearm-Logbook"
 
@@ -1171,7 +1171,69 @@ def _on_window_ready():
         threading.Timer(5 - elapsed, _close_splash).start()
 
 
+_mutex_handle = None   # module-level: must live for the process lifetime
+
+
+def _acquire_single_instance(mutex_name: str) -> bool:
+    # Name convention: "JDE_Simple{Thing}Tool_SingleInstance"
+    # Session-local (no "Global\" prefix): each Windows session (e.g. RDP,
+    # fast user switching) gets its own instance instead of colliding across users.
+    global _mutex_handle
+    try:
+        # use_last_error=True: ctypes.windll's GetLastError() can be clobbered
+        # by ctypes-internal calls, so read the error via ctypes.get_last_error() instead.
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        _mutex_handle = kernel32.CreateMutexW(None, False, mutex_name)
+        return ctypes.get_last_error() != 183   # ERROR_ALREADY_EXISTS
+    except Exception:
+        return True   # fail open: never block launch over a mutex error
+
+
+def _focus_existing_window(app_title: str) -> bool:
+    # Best-effort only: any failure here must not stop the caller from deciding what to do next.
+    try:
+        user32 = ctypes.windll.user32
+        found = {"hwnd": None}
+
+        WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+        def _enum_proc(hwnd, lparam):
+            if not user32.IsWindowVisible(hwnd):
+                return True
+            length = user32.GetWindowTextLengthW(hwnd)
+            if length == 0:
+                return True
+            buf = ctypes.create_unicode_buffer(length + 1)
+            user32.GetWindowTextW(hwnd, buf, length + 1)
+            # Exact match only: a prefix match could hit an unrelated window
+            # (e.g. a browser tab starting with the app name). A miss falls
+            # through to a normal launch anyway.
+            if buf.value == app_title:
+                found["hwnd"] = hwnd
+                return False   # stop enumerating, match found
+            return True
+
+        user32.EnumWindows(WNDENUMPROC(_enum_proc), 0)
+
+        hwnd = found["hwnd"]
+        if not hwnd:
+            return False
+
+        SW_RESTORE = 9
+        if user32.IsIconic(hwnd):
+            user32.ShowWindow(hwnd, SW_RESTORE)
+        user32.SetForegroundWindow(hwnd)
+        return True
+    except Exception:
+        return False
+
+
 def main():
+    if not _acquire_single_instance("JDE_SimpleFirearmLogbook_SingleInstance"):
+        if _focus_existing_window("Simple Firearm Logbook"):
+            sys.exit(0)
+        # Existing window not found: fail open and launch normally.
+
     if sys.platform == "win32":
         try:
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
