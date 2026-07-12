@@ -4,7 +4,7 @@ on:
     tags: ['v*']
 jobs:
   release:
-    uses: JDE-Projects/Build-Tools/.github/workflows/release.yml@a2cb83a9459b6c357fc4f7778e8d1e99844fc8f9 # Build-Tools main (checkout v7)
+    uses: JDE-Projects/Build-Tools/.github/workflows/release.yml@1d180ec47b21c46e87303d663099111ce4a36d83 # Build-Tools main (CI checks: ruff, import, pytest)
     permissions:
       id-token: write
       attestations: write
@@ -15,3 +15,4 @@ jobs:
       python_version: "3.14"
       build_command: "Build_Simple_Firearm_Logbook.bat"
       app_id: "03849f99-e535-4ae8-aff7-bc442f6a868b"
+      entry_script: "simple_firearm_logbook.py"
