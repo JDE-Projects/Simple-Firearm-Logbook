@@ -154,51 +154,78 @@ def save_prefs(prefs: dict) -> bool:
         return False
 
 
-def _restore_geometry() -> dict:
-    """Read a saved window position/size out of prefs, validated against the
-    monitors currently connected. Returns {} (meaning "let pywebview center
-    it as usual") whenever the saved value is missing, malformed, or points
-    somewhere that isn't reachable anymore, e.g. a monitor that's since been
-    unplugged. Never raises."""
+# Window geometry persistence. Windows-only: needs `import ctypes` and
+# `from ctypes import wintypes` in the app. Requires load_prefs / save_prefs
+# from theme-prefs.py.
+#
+# Save and restore the ABSOLUTE window frame rectangle via Win32, found by the
+# window title. GetWindowRect (save) and SetWindowPos (restore) share one
+# frame-based, physical-pixel coordinate space, so the rect round-trips exactly
+# at any DPI or monitor layout. Do NOT pass x/y into create_window and do NOT
+# use window.move: pywebview's Qt backend applies those pre-show and relative to
+# the primary screen, so the window lands on the wrong monitor, drifts down by
+# the title-bar height each launch, and slides sideways at non-100% scaling.
+
+
+def _win32():
+    u = ctypes.windll.user32
+    u.FindWindowW.restype = wintypes.HWND
+    u.FindWindowW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR]
+    u.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+    u.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int,
+                               ctypes.c_int, ctypes.c_int, wintypes.UINT]
+    return u
+
+
+def _save_geometry(win) -> None:
+    """Save the absolute frame rect (physical px) via Win32. Wire to `closing`.
+    Wrapped end to end so a failure here can never block the window from closing."""
+    try:
+        u = _win32()
+        hwnd = u.FindWindowW(None, win.title)
+        if not hwnd:
+            return
+        r = wintypes.RECT()
+        if not u.GetWindowRect(hwnd, ctypes.byref(r)):
+            return
+        x, y, w, h = r.left, r.top, r.right - r.left, r.bottom - r.top
+        if x <= -30000 or y <= -30000:   # minimized sentinel, not a real spot
+            return
+        if w <= 0 or h <= 0:
+            return
+        prefs = load_prefs()
+        prefs["window"] = {"x": x, "y": y, "width": w, "height": h}
+        save_prefs(prefs)
+    except Exception:
+        pass
+
+
+def _restore_geometry(win) -> None:
+    """Restore the saved frame rect via Win32. Wire to `shown` (after the OS
+    window exists). Validate before applying; never raise."""
     try:
         geo = load_prefs().get("window")
         if not isinstance(geo, dict):
-            return {}
-        x, y, width, height = geo.get("x"), geo.get("y"), geo.get("width"), geo.get("height")
-        for v in (x, y, width, height):
+            return
+        x, y, w, h = geo.get("x"), geo.get("y"), geo.get("width"), geo.get("height")
+        for v in (x, y, w, h):
             if not isinstance(v, int) or isinstance(v, bool):
-                return {}
-        width = max(1000, min(width, 10000))
-        height = max(680, min(height, 10000))
-
+                return
+        if w <= 0 or h <= 0:
+            return
+        # Is a point in the title bar still on a connected monitor?
         point = wintypes.POINT(x + 100, y + 30)
         user32 = ctypes.windll.user32
         user32.MonitorFromPoint.argtypes = [wintypes.POINT, wintypes.DWORD]
         user32.MonitorFromPoint.restype = wintypes.HMONITOR
-        MONITOR_DEFAULTTONULL = 0
-        monitor = user32.MonitorFromPoint(point, MONITOR_DEFAULTTONULL)
-        if not monitor:
-            return {}
-
-        return {"x": x, "y": y, "width": width, "height": height}
-    except Exception:
-        return {}
-
-
-def _save_geometry(win) -> None:
-    """Save the window's current position/size to prefs so the next launch
-    can restore it. Guarded end-to-end so a failure here can never interfere
-    with closing the app."""
-    try:
-        x, y, width, height = win.x, win.y, win.width, win.height
-        for v in (x, y, width, height):
-            if not isinstance(v, int) or isinstance(v, bool):
-                return
-        if x <= -30000 or y <= -30000:
+        if not user32.MonitorFromPoint(point, 0):   # MONITOR_DEFAULTTONULL
             return
-        prefs = load_prefs()
-        prefs["window"] = {"x": x, "y": y, "width": width, "height": height}
-        save_prefs(prefs)
+        u = _win32()
+        hwnd = u.FindWindowW(None, win.title)
+        if not hwnd:
+            return
+        SWP_NOZORDER, SWP_NOACTIVATE = 0x0004, 0x0010
+        u.SetWindowPos(hwnd, None, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE)
     except Exception:
         pass
 
@@ -1260,30 +1287,17 @@ def main():
 
     api.set_conn(conn)
 
-    geo = _restore_geometry()
-    if geo:
-        win = webview.create_window(
-            "Simple Firearm Logbook",
-            url=resource_path("simple_firearm_logbook-UI.html"),
-            js_api=api,
-            x=geo["x"],
-            y=geo["y"],
-            width=geo["width"],
-            height=geo["height"],
-            min_size=(1000, 680),
-            background_color="#0a0e14",
-        )
-    else:
-        win = webview.create_window(
-            "Simple Firearm Logbook",
-            url=resource_path("simple_firearm_logbook-UI.html"),
-            js_api=api,
-            width=1280,
-            height=820,
-            min_size=(1000, 680),
-            background_color="#0a0e14",
-        )
+    win = webview.create_window(
+        "Simple Firearm Logbook",
+        url=resource_path("simple_firearm_logbook-UI.html"),
+        js_api=api,
+        width=1280,
+        height=820,
+        min_size=(1000, 680),
+        background_color="#0a0e14",
+    )
     api.set_window(win)
+    win.events.shown += lambda: _restore_geometry(win)
 
     def _on_window_closing():
         _save_geometry(win)
