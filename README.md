@@ -74,7 +74,7 @@ pipeline from this repo. You can also check the file against the published
 ## Security and privacy
 - Everything is stored locally next to the exe: the database and the photos folder.
 - Nothing is sent anywhere.
-- The only network call is the manual update check against GitHub releases.
+- The only network call is the version check against GitHub Releases.
 
 ## A note on how this was built
 This project was built with AI assistance. The design decisions, feature

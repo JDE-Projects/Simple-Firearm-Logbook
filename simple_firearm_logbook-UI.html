@@ -66,7 +66,7 @@ header {
   padding:18px 24px 12px; gap:18px; flex:0 0 auto;
 }
 .head-left { flex:0 0 auto; min-width:0; }
-.title { font-size:22px; font-weight:700; letter-spacing:.2px; white-space:nowrap; }
+.title { font-size:22px; font-weight:700; letter-spacing:.2px; }
 .byline { font-family:"JetBrains Mono", monospace; font-size:11.5px; color:var(--text-dim); margin-top:3px; }
 .gh-link { font-family:"JetBrains Mono", monospace; font-size:11.5px; color:var(--accent); cursor:pointer; text-decoration:none; }
 .gh-link:hover { text-decoration:underline; }
@@ -293,8 +293,7 @@ table.fw-table tbody tr.disposed-row:hover { opacity:.85; }
   <header>
     <div class="head-left">
       <div class="title">Simple Firearm Logbook</div>
-      <div class="byline">by JDE-Projects</div>
-      <a class="gh-link" onclick="openUrl('https://github.com/JDE-Projects')">github.com/JDE-Projects</a>
+      <div class="byline">by <a class="gh-link" onclick="openUrl('https://github.com/JDE-Projects')">JDE-Projects</a></div>
     </div>
     <div class="head-right">
       <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle theme">
@@ -1159,7 +1158,7 @@ $("updateBtn").onclick = async () => {
       fadeNotice();
     }
   } catch (e) {
-    notice.textContent = "Couldn't reach GitHub";
+    notice.textContent = "Couldn't reach GitHub to check for updates";
     fadeNotice();
   }
   btn.disabled = false;
