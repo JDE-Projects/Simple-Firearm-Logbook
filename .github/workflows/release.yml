@@ -1,4 +1,5 @@
 name: Release
+run-name: Release ${{ github.ref_name }}   # else the run is titled by the tagged commit's message
 on:
   push:
     tags: ['v*']
