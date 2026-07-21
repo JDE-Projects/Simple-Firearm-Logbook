@@ -16,3 +16,6 @@ dist/
 __pycache__/
 *.pyc
 needs-fixed.md
+
+# Python virtual environment
+.venv/

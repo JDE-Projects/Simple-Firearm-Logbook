@@ -7,6 +7,12 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # ruff and pytest are pinned centrally in Build-Tools
+      # (templates/dev/requirements.txt). They arrive here when this repo's
+      # workflow SHA is repointed, so Dependabot must not bump them locally.
+      - dependency-name: ruff
+      - dependency-name: pytest
   - package-ecosystem: github-actions
     directory: /
     schedule:
