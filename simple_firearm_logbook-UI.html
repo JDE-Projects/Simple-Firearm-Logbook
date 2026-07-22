@@ -642,7 +642,10 @@ function fmtPrice(s){
   if (!s) return "";
   const n = parseFloat(s);
   if (isNaN(n)) return esc(s);
-  return "$" + n.toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2});
+  // Sign outside the currency symbol: "-$5.00", not "$-5.00". Matches
+  // _fmt_price_html on the Python side.
+  const sign = n < 0 ? "-" : "";
+  return sign + "$" + Math.abs(n).toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2});
 }
 function valOrEmpty(html){
   return html ? html : '<span class="empty">Not set</span>';

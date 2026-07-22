@@ -22,7 +22,7 @@ import threading
 import time
 import urllib.request
 import zipfile
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 import webview
 
@@ -91,9 +91,16 @@ def parse_decimal_optional(raw):
         value = Decimal(s)
     except InvalidOperation:
         return None, "Enter a valid amount."
-    if value < 0:
+    if not value.is_finite():
+        return None, "Enter a valid amount."
+    quantized = value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    if quantized < 0:
         return None, "Amount must be zero or greater."
-    return str(value.quantize(Decimal("0.01"))), None
+    if quantized.is_zero():
+        # Normalizes both "-0" and small negatives that round to zero (e.g.
+        # "-0.001") to a plain positive zero, rather than "-0.00".
+        quantized = Decimal("0.00")
+    return str(quantized), None
 
 
 def _sniff_image_mime(data: bytes) -> str:
@@ -437,7 +444,9 @@ def _fmt_price_html(s) -> str:
     if not s:
         return "Not set"
     try:
-        return "${:,.2f}".format(Decimal(s))
+        value = Decimal(s)
+        sign = "-" if value < 0 else ""
+        return f"{sign}${abs(value):,.2f}"
     except Exception:
         return _esc_html(s)
 
