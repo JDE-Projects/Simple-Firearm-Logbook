@@ -1,0 +1,10 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  ci:
+    uses: JDE-Projects/Build-Tools/.github/workflows/ci-windows.yml@2b92086df5ca65ff333478a1a8cc8953802dd28b # Build-Tools main (ruff, import check, pytest)
+    with:
+      entry_script: "simple_firearm_logbook.py"
