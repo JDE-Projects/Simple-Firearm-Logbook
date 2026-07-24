@@ -5,7 +5,7 @@ on:
     tags: ['v*']
 jobs:
   release:
-    uses: JDE-Projects/Build-Tools/.github/workflows/release.yml@50c6357e33a5c715e4f55df9e366c9600cca0943 # Build-Tools main (CI checks: ruff, import, pytest)
+    uses: JDE-Projects/Build-Tools/.github/workflows/release.yml@2b92086df5ca65ff333478a1a8cc8953802dd28b # Build-Tools main (CI checks: ruff, import, pytest)
     permissions:
       id-token: write
       attestations: write
