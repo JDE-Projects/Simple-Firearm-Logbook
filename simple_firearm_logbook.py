@@ -93,7 +93,12 @@ def parse_decimal_optional(raw):
         return None, "Enter a valid amount."
     if not value.is_finite():
         return None, "Enter a valid amount."
-    quantized = value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    try:
+        quantized = value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    except InvalidOperation:
+        if value < 0:
+            return None, "Amount must be zero or greater."
+        return None, "Enter a valid amount."
     if quantized < 0:
         return None, "Amount must be zero or greater."
     if quantized.is_zero():

@@ -137,6 +137,18 @@ def test_multiple_decimal_points_is_rejected():
     assert error == "Enter a valid amount."
 
 
+def test_oversized_positive_exponent_is_rejected_not_raised():
+    value, error = app.parse_decimal_optional("1e999999")
+    assert value is None
+    assert error == "Enter a valid amount."
+
+
+def test_oversized_negative_exponent_is_rejected_not_raised():
+    value, error = app.parse_decimal_optional("-1e999999")
+    assert value is None
+    assert error == "Amount must be zero or greater."
+
+
 # ─────────────────────────────────────────────────────────────
 #  Non-finite Decimal values (the confirmed bug)
 # ─────────────────────────────────────────────────────────────
