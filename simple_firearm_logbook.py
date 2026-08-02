@@ -26,7 +26,7 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 import webview
 
-APP_VERSION = "1.3.0"
+APP_VERSION = "1.3.1"
 GITHUB_OWNER = "JDE-Projects"
 GITHUB_REPO = "Simple-Firearm-Logbook"
 
