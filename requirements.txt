@@ -3,3 +3,8 @@ pywebview==6.2.1
 PySide6==6.11.1
 qtpy==2.4.3
 pyinstaller==6.21.0
+# truststore routes TLS through the Windows certificate store instead of the CA
+# list bundled with Python, so antivirus and network filters that inspect HTTPS
+# do not break the GitHub update check. Needs --hidden-import truststore in the
+# build (see sxt-build-ship).
+truststore==0.10.4

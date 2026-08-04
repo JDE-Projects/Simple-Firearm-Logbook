@@ -588,6 +588,17 @@ table.fw-table tbody tr.disposed-row:hover { opacity:.85; }
     </div>
   </div>
 
+  <!-- update check failure modal -->
+  <div class="modal-scrim" id="updateErrModalScrim">
+    <div class="modal">
+      <h3>Couldn't check for updates</h3>
+      <div class="m-msg" id="update-err-msg"></div>
+      <div class="m-foot">
+        <button class="btn" onclick="closeUpdateErrorModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <div class="bottom-bar">
@@ -1149,6 +1160,13 @@ function fadeNotice(){
     setTimeout(() => { notice.textContent = ""; notice.style.opacity = "1"; }, 500);
   }, 5000);
 }
+function openUpdateErrorModal(reason){
+  $("update-err-msg").textContent = reason;
+  $("updateErrModalScrim").classList.add("open");
+}
+function closeUpdateErrorModal(){
+  $("updateErrModalScrim").classList.remove("open");
+}
 $("updateBtn").onclick = async () => {
   const btn = $("updateBtn");
   const notice = $("updateNotice");
@@ -1161,15 +1179,17 @@ $("updateBtn").onclick = async () => {
     if (r && r.update) {
       notice.innerHTML = 'Update available: <a href="https://github.com/JDE-Projects/Simple-Firearm-Logbook/blob/main/README.md#updating" target="_blank" rel="noopener">v' + esc(r.version) + '</a>';
     } else if (r && r.offline) {
-      notice.textContent = "Couldn't reach GitHub to check for updates";
+      notice.textContent = "Couldn't reach GitHub to check for updates.";
       fadeNotice();
+      openUpdateErrorModal(r.reason || "The app couldn't run the update check.");
     } else {
       notice.textContent = "You're on the latest version (v" + esc(r.current) + ")";
       fadeNotice();
     }
   } catch (e) {
-    notice.textContent = "Couldn't reach GitHub to check for updates";
+    notice.textContent = "Couldn't reach GitHub to check for updates.";
     fadeNotice();
+    openUpdateErrorModal("The app couldn't run the update check.");
   }
   btn.disabled = false;
   btn.textContent = "Check for updates";
