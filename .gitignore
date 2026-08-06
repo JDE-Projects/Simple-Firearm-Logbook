@@ -7,7 +7,6 @@ Debug_Log_*.txt
 # Local working files
 status.md
 roadmap.md
-Launch_*.bat
 
 # Build output
 build/
