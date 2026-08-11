@@ -6,5 +6,7 @@ on:
 jobs:
   ci:
     uses: JDE-Projects/Build-Tools/.github/workflows/ci-windows.yml@01090b68a33074fda7fcd97d088cb29aa9718f61 # Build-Tools main (ruff, import check, pytest)
+    permissions:
+      contents: read
     with:
       entry_script: "simple_firearm_logbook.py"
