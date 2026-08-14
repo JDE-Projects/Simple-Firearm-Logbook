@@ -28,7 +28,7 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 import webview
 from PIL import Image, ImageOps
 
-APP_VERSION = "1.3.2"
+APP_VERSION = "1.4.0"
 GITHUB_OWNER = "JDE-Projects"
 GITHUB_REPO = "Simple-Firearm-Logbook"
 
