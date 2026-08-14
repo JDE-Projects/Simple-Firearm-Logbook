@@ -302,6 +302,14 @@ class NewerSchemaError(Exception):
     case; the caller should tell the user to update the app."""
 
 
+def _ensure_column(conn, table: str, column: str, decl: str) -> None:
+    """Add a column to an existing table only if it isn't already there.
+    Additive-only: never rewrites or drops. Safe to call on every open."""
+    existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+    if column not in existing:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+
+
 def open_db(path: str) -> sqlite3.Connection:
     """Open (creating if missing) the SQLite database and ensure the schema.
     Refuses to touch a database stamped with a schema newer than this build
@@ -331,6 +339,8 @@ def open_db(path: str) -> sqlite3.Connection:
             acquired_from TEXT NOT NULL DEFAULT '',
             purchase_price TEXT NOT NULL DEFAULT '',
             estimated_value TEXT NOT NULL DEFAULT '',
+            insured_value TEXT NOT NULL DEFAULT '',
+            storage_location TEXT NOT NULL DEFAULT '',
             notes TEXT NOT NULL DEFAULT '',
             disposition_status TEXT NOT NULL DEFAULT 'Owned',
             disposition_date TEXT NOT NULL DEFAULT '',
@@ -358,7 +368,12 @@ def open_db(path: str) -> sqlite3.Connection:
 
     # Standing rule: migrations in this function must stay additive-only (new
     # tables/columns guarded by an existence check, never a destructive
-    # rewrite), matching the rest of the JDE-Projects fleet.
+    # rewrite), matching the rest of the JDE-Projects fleet. These columns are
+    # backward compatible (an older build tolerates the extra columns), so they
+    # do not bump SCHEMA_VERSION.
+    _ensure_column(conn, "firearms", "insured_value", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "firearms", "storage_location", "TEXT NOT NULL DEFAULT ''")
+
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.commit()
     return conn
@@ -387,6 +402,8 @@ def _firearm_row_to_dict(r) -> dict:
         "acquired_from": r["acquired_from"],
         "purchase_price": r["purchase_price"],
         "estimated_value": r["estimated_value"],
+        "insured_value": r["insured_value"],
+        "storage_location": r["storage_location"],
         "notes": r["notes"],
         "disposition_status": r["disposition_status"],
         "disposition_date": r["disposition_date"],
@@ -473,6 +490,8 @@ def _render_identity_block(f: dict) -> str:
         <tr><th>Acquired From</th><td>{_esc_html(f['acquired_from']) or 'Not set'}</td></tr>
         <tr><th>Purchase Price</th><td>{_fmt_price_html(f['purchase_price'])}</td></tr>
         <tr><th>Estimated Value</th><td>{_fmt_price_html(f['estimated_value'])}</td></tr>
+        <tr><th>Insured Value</th><td>{_fmt_price_html(f['insured_value'])}</td></tr>
+        <tr><th>Storage Location</th><td>{_esc_html(f['storage_location']) or 'Not set'}</td></tr>
       </table>
     </div>
     """
@@ -589,7 +608,8 @@ def _build_csv_text(firearms: list) -> str:
     writer.writerow(
         [
             "Log Number", "Make", "Model", "Serial Number", "Type", "Caliber",
-            "Acquisition Date", "Acquired From", "Purchase Price", "Estimated Value", "Notes",
+            "Acquisition Date", "Acquired From", "Purchase Price", "Estimated Value",
+            "Insured Value", "Storage Location", "Notes",
             "Disposition Status", "Disposition Date", "Disposition To", "Disposition Address",
             "Disposition Amount", "Disposition Notes",
         ]
@@ -598,7 +618,8 @@ def _build_csv_text(firearms: list) -> str:
         writer.writerow(
             [
                 f["log_number"], f["make"], f["model"], f["serial_number"], f["firearm_type"], f["caliber"],
-                f["acquisition_date"], f["acquired_from"], f["purchase_price"], f["estimated_value"], f["notes"],
+                f["acquisition_date"], f["acquired_from"], f["purchase_price"], f["estimated_value"],
+                f["insured_value"], f["storage_location"], f["notes"],
                 f["disposition_status"], f["disposition_date"], f["disposition_to"], f["disposition_address"],
                 f["disposition_amount"], f["disposition_notes"],
             ]
@@ -781,7 +802,7 @@ class Api:
 
     def create_firearm(self, make, model, serial_number="", firearm_type="", caliber="",
                         acquisition_date="", acquired_from="", purchase_price="",
-                        estimated_value="", notes=""):
+                        estimated_value="", insured_value="", storage_location="", notes=""):
         try:
             make_s = (make or "").strip()
             model_s = (model or "").strip()
@@ -796,22 +817,27 @@ class Api:
             value_s, err = parse_decimal_optional(estimated_value)
             if err:
                 return {"ok": False, "error": err}
+            insured_s, err = parse_decimal_optional(insured_value)
+            if err:
+                return {"ok": False, "error": err}
             serial_s = (serial_number or "").strip()
             type_s = (firearm_type or "").strip()
             caliber_s = (caliber or "").strip()
             acquired_from_s = (acquired_from or "").strip()
+            storage_s = (storage_location or "").strip()
             notes_s = (notes or "").strip()
             now = datetime.datetime.now().isoformat(timespec="seconds")
             cur = self._conn.cursor()
             log_number = _get_next_log_number(cur)
             cur.execute(
                 "INSERT INTO firearms (log_number, make, model, serial_number, firearm_type, caliber, "
-                "acquisition_date, acquired_from, purchase_price, estimated_value, notes, "
+                "acquisition_date, acquired_from, purchase_price, estimated_value, "
+                "insured_value, storage_location, notes, "
                 "disposition_status, disposition_date, disposition_to, disposition_address, "
                 "disposition_amount, disposition_notes, created_at, updated_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Owned', '', '', '', '', '', ?, ?)",
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Owned', '', '', '', '', '', ?, ?)",
                 (log_number, make_s, model_s, serial_s, type_s, caliber_s, date_s, acquired_from_s,
-                 price_s, value_s, notes_s, now, now),
+                 price_s, value_s, insured_s, storage_s, notes_s, now, now),
             )
             new_id = cur.lastrowid
             self._conn.commit()
@@ -824,7 +850,7 @@ class Api:
 
     def update_firearm(self, firearm_id, make, model, serial_number="", firearm_type="", caliber="",
                         acquisition_date="", acquired_from="", purchase_price="",
-                        estimated_value="", notes=""):
+                        estimated_value="", insured_value="", storage_location="", notes=""):
         """Edits identity/notes fields only; log number and disposition are
         untouched (disposition has its own editing action)."""
         try:
@@ -844,18 +870,23 @@ class Api:
             value_s, err = parse_decimal_optional(estimated_value)
             if err:
                 return {"ok": False, "error": err}
+            insured_s, err = parse_decimal_optional(insured_value)
+            if err:
+                return {"ok": False, "error": err}
             serial_s = (serial_number or "").strip()
             type_s = (firearm_type or "").strip()
             caliber_s = (caliber or "").strip()
             acquired_from_s = (acquired_from or "").strip()
+            storage_s = (storage_location or "").strip()
             notes_s = (notes or "").strip()
             now = datetime.datetime.now().isoformat(timespec="seconds")
             self._conn.execute(
                 "UPDATE firearms SET make=?, model=?, serial_number=?, firearm_type=?, caliber=?, "
-                "acquisition_date=?, acquired_from=?, purchase_price=?, estimated_value=?, notes=?, "
+                "acquisition_date=?, acquired_from=?, purchase_price=?, estimated_value=?, "
+                "insured_value=?, storage_location=?, notes=?, "
                 "updated_at=? WHERE id=?",
                 (make_s, model_s, serial_s, type_s, caliber_s, date_s, acquired_from_s,
-                 price_s, value_s, notes_s, now, firearm_id),
+                 price_s, value_s, insured_s, storage_s, notes_s, now, firearm_id),
             )
             self._conn.commit()
             self.log(f"Firearm {row['log_number']} updated")

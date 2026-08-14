@@ -459,6 +459,14 @@ table.fw-table tbody tr.disposed-row:hover { opacity:.85; }
           <label>Estimated value</label>
           <input id="ff-value" class="mono" placeholder="0.00" inputmode="decimal">
         </div>
+        <div class="fld">
+          <label>Insured value</label>
+          <input id="ff-insured" class="mono" placeholder="0.00" inputmode="decimal">
+        </div>
+        <div class="fld">
+          <label>Storage location</label>
+          <input id="ff-storage" autocomplete="off">
+        </div>
         <div class="fld span2">
           <label>Notes</label>
           <textarea id="ff-notes"></textarea>
@@ -785,7 +793,7 @@ function showListView(){
 function openAddFirearmModal(){
   editingFirearmId = null;
   $("firearmModalTitle").textContent = "Add firearm";
-  ["ff-make","ff-model","ff-serial","ff-type","ff-caliber","ff-acq-date","ff-acq-from","ff-price","ff-value","ff-notes"].forEach(id => $(id).value = "");
+  ["ff-make","ff-model","ff-serial","ff-type","ff-caliber","ff-acq-date","ff-acq-from","ff-price","ff-value","ff-insured","ff-storage","ff-notes"].forEach(id => $(id).value = "");
   $("ff-err").textContent = "";
   loadAutocomplete();
   $("firearmModalScrim").classList.add("open");
@@ -804,6 +812,8 @@ function openEditFirearmModal(){
   $("ff-acq-from").value = currentFirearm.acquired_from || "";
   $("ff-price").value = currentFirearm.purchase_price || "";
   $("ff-value").value = currentFirearm.estimated_value || "";
+  $("ff-insured").value = currentFirearm.insured_value || "";
+  $("ff-storage").value = currentFirearm.storage_location || "";
   $("ff-notes").value = currentFirearm.notes || "";
   $("ff-err").textContent = "";
   loadAutocomplete();
@@ -819,7 +829,8 @@ async function saveFirearm(){
   const fields = [
     $("ff-make").value, $("ff-model").value, $("ff-serial").value, $("ff-type").value,
     $("ff-caliber").value, $("ff-acq-date").value, $("ff-acq-from").value,
-    $("ff-price").value, $("ff-value").value, $("ff-notes").value,
+    $("ff-price").value, $("ff-value").value,
+    $("ff-insured").value, $("ff-storage").value, $("ff-notes").value,
   ];
   let r;
   if (editingFirearmId){
@@ -877,6 +888,8 @@ function renderDetail(){
     fieldBlock("Acquired from", f.acquired_from),
     fieldBlockPrice("Purchase price", f.purchase_price),
     fieldBlockPrice("Estimated value", f.estimated_value),
+    fieldBlockPrice("Insured value", f.insured_value),
+    fieldBlock("Storage location", f.storage_location),
   ].join("");
 
   if (f.notes){
