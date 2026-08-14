@@ -96,6 +96,48 @@ def test_older_schema_version_is_upgraded_without_raising(tmp_path):
         conn2.close()
 
 
+def test_migration_adds_new_columns_to_a_pre_existing_firearms_table(tmp_path):
+    # A database created before insured_value / storage_location existed: a
+    # firearms table without those columns, holding one row. open_db must add
+    # the columns (additive) and leave the existing row's data intact.
+    db_path = str(tmp_path / "old_firearms.db")
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "CREATE TABLE firearms (id INTEGER PRIMARY KEY, log_number TEXT, "
+        "make TEXT, model TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO firearms (id, log_number, make, model) VALUES (1, '00001', 'Glock', '19')"
+    )
+    conn.commit()
+    conn.close()
+
+    conn2 = app.open_db(db_path)
+    try:
+        cols = {row["name"] for row in conn2.execute("PRAGMA table_info(firearms)")}
+        assert "insured_value" in cols
+        assert "storage_location" in cols
+        row = conn2.execute("SELECT * FROM firearms WHERE id=1").fetchone()
+        assert row["make"] == "Glock"
+        assert row["insured_value"] == ""
+        assert row["storage_location"] == ""
+    finally:
+        conn2.close()
+
+
+def test_migration_is_idempotent_when_columns_already_exist(tmp_path):
+    db_path = str(tmp_path / "twice.db")
+    app.open_db(db_path).close()
+    # Reopening a database that already has the new columns must not raise.
+    conn2 = app.open_db(db_path)
+    try:
+        cols = {row["name"] for row in conn2.execute("PRAGMA table_info(firearms)")}
+        assert "insured_value" in cols
+        assert "storage_location" in cols
+    finally:
+        conn2.close()
+
+
 # ─────────────────────────────────────────────────────────────
 #  Newer-than-supported schema: must raise, not silently open
 # ─────────────────────────────────────────────────────────────

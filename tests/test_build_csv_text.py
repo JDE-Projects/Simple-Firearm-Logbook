@@ -11,7 +11,8 @@ import simple_firearm_logbook as app
 
 _ALL_FIELDS = (
     "log_number", "make", "model", "serial_number", "firearm_type", "caliber",
-    "acquisition_date", "acquired_from", "purchase_price", "estimated_value", "notes",
+    "acquisition_date", "acquired_from", "purchase_price", "estimated_value",
+    "insured_value", "storage_location", "notes",
     "disposition_status", "disposition_date", "disposition_to", "disposition_address",
     "disposition_amount", "disposition_notes",
 )
@@ -33,10 +34,16 @@ def test_header_row_matches_expected_columns():
     header_line = text.splitlines()[0]
     assert header_line == (
         "Log Number,Make,Model,Serial Number,Type,Caliber,Acquisition Date,"
-        "Acquired From,Purchase Price,Estimated Value,Notes,Disposition Status,"
-        "Disposition Date,Disposition To,Disposition Address,Disposition Amount,"
-        "Disposition Notes"
+        "Acquired From,Purchase Price,Estimated Value,Insured Value,Storage Location,"
+        "Notes,Disposition Status,Disposition Date,Disposition To,Disposition Address,"
+        "Disposition Amount,Disposition Notes"
     )
+
+
+def test_new_value_and_location_fields_land_in_the_row():
+    text = app._build_csv_text([_firearm(insured_value="1500.00", storage_location="Safe A")])
+    assert "1500.00" in text
+    assert "Safe A" in text
 
 
 def test_empty_list_produces_only_the_header():
