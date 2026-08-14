@@ -14,7 +14,7 @@ close-up stays readable. The contract that matters:
 """
 
 import pytest
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 
 import simple_firearm_logbook as app
 
@@ -106,5 +106,5 @@ def test_non_image_source_raises(tmp_path):
     out = str(tmp_path / "out.jpg")
     with open(src, "w", encoding="utf-8") as f:
         f.write("this is not image data")
-    with pytest.raises(Exception):
+    with pytest.raises(UnidentifiedImageError):
         app.optimize_image_to_jpeg(src, out)
