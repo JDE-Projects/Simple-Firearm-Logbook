@@ -16,7 +16,6 @@ import errno
 import io
 import json
 import os
-import shutil
 import socket
 import sqlite3
 import ssl
@@ -29,6 +28,7 @@ import zipfile
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 import webview
+from PIL import Image, ImageOps
 
 APP_VERSION = "1.3.2"
 GITHUB_OWNER = "JDE-Projects"
@@ -41,6 +41,13 @@ SCHEMA_VERSION = 1
 DISPOSITION_STATUSES = ("Owned", "Sold", "Traded", "Lost", "Stolen", "Other")
 STANDARD_FIREARM_TYPES = ("Pistol", "Revolver", "Rifle", "Shotgun", "Other")
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".tif", ".tiff")
+
+# Photo import optimization: scale the long edge down to this many pixels (only
+# when the source is bigger) and re-encode as JPEG at this quality. A big phone
+# photo drops from megabytes to a few hundred KB while a serial-number close-up
+# stays readable. Applied on import only; the user's original file is untouched.
+PHOTO_MAX_EDGE = 2400
+PHOTO_JPEG_QUALITY = 85
 
 
 def resource_path(rel: str) -> str:
@@ -129,6 +136,38 @@ def _sniff_image_mime(data: bytes) -> str:
     if data[:4] in (b"II*\x00", b"MM\x00*"):
         return "image/tiff"
     return "image/jpeg"
+
+
+def optimize_image_to_jpeg(src: str, target: str, max_edge: int = PHOTO_MAX_EDGE,
+                           quality: int = PHOTO_JPEG_QUALITY) -> None:
+    """Read an image, apply its stored EXIF rotation, scale the long edge down
+    to max_edge if it is larger, and write the result to target as a JPEG.
+
+    Never reads or writes anything but src (read) and target (write), so the
+    user's original is always safe. Raises on any failure (unreadable file,
+    unsupported data, write error) so the caller can refuse to store a broken
+    or oversized photo rather than pretend the import worked.
+    """
+    with Image.open(src) as opened:
+        # Honor the orientation a phone camera records in EXIF, so a photo that
+        # looks upright in the gallery isn't stored sideways.
+        img = ImageOps.exif_transpose(opened)
+        # JPEG has no transparency, so flatten any alpha channel onto white
+        # instead of letting it turn black.
+        if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+            rgba = img.convert("RGBA")
+            flattened = Image.new("RGB", rgba.size, (255, 255, 255))
+            flattened.paste(rgba, mask=rgba.split()[-1])
+            img = flattened
+        elif img.mode != "RGB":
+            img = img.convert("RGB")
+        long_edge = max(img.size)
+        if long_edge > max_edge:
+            scale = max_edge / long_edge
+            new_size = (max(1, round(img.size[0] * scale)),
+                        max(1, round(img.size[1] * scale)))
+            img = img.resize(new_size, Image.LANCZOS)
+        img.save(target, "JPEG", quality=quality)
 
 
 def _safe_photo_path(filename: str):
@@ -965,6 +1004,7 @@ class Api:
             ).fetchone()[0] > 0
 
             added = 0
+            failed = 0
             for src in paths:
                 if not src or not os.path.isfile(src):
                     continue
@@ -974,7 +1014,20 @@ class Api:
                 seq += 1
                 target_name = f"{row['log_number']}_{seq}.jpg"
                 target_full = os.path.join(photos_dir, target_name)
-                shutil.copy2(src, target_full)
+                try:
+                    optimize_image_to_jpeg(src, target_full)
+                except Exception as e:
+                    # Never store a broken or half-written photo, and don't burn
+                    # a sequence number on one that didn't make it in.
+                    seq -= 1
+                    failed += 1
+                    self.log(f"Photo optimize failed for {src}: {e}")
+                    try:
+                        if os.path.exists(target_full):
+                            os.remove(target_full)
+                    except Exception:
+                        pass
+                    continue
                 rel_name = f"{PHOTOS_DIRNAME}/{target_name}"
                 is_primary = 1 if not has_primary else 0
                 cur.execute(
@@ -985,8 +1038,15 @@ class Api:
                     has_primary = True
                 added += 1
             self._conn.commit()
-            self.log(f"Added {added} photo(s) to firearm {row['log_number']}")
-            return {"ok": True, "photos": self._get_photos(firearm_id), "added": added}
+            self.log(f"Added {added} photo(s) to firearm {row['log_number']}"
+                     + (f", {failed} failed" if failed else ""))
+            result = {"ok": True, "photos": self._get_photos(firearm_id), "added": added}
+            if failed:
+                # No silent failures: tell the user some photos didn't make it.
+                result["warning"] = (
+                    f"{failed} photo(s) couldn't be read and were not added."
+                )
+            return result
         except Exception as e:
             self._conn.rollback()
             self.log(f"add_photos failed: {e}")

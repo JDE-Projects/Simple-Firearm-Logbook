@@ -1013,6 +1013,7 @@ async function addPhotos(){
   currentPhotos = r.photos;
   renderGallery();
   await loadFirearms();
+  if (r.warning) showToast(r.warning);
 }
 
 function openDeletePhotoModal(photoId){
