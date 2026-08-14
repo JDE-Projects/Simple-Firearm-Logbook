@@ -3,6 +3,9 @@ pywebview==6.2.1
 PySide6==6.11.1
 qtpy==2.4.3
 pyinstaller==6.21.0
+# Pillow re-encodes and shrinks imported photos (scale long edge, JPEG). App-
+# specific (only tools with photos need it), so it is not in the shared baseline.
+Pillow==12.3.0
 # truststore routes TLS through the Windows certificate store instead of the CA
 # list bundled with Python, so antivirus and network filters that inspect HTTPS
 # do not break the GitHub update check. Needs --hidden-import truststore in the
