@@ -61,7 +61,7 @@ pipeline from this repo. You can also check the file against the published
 - Python 3 on PATH.
 - `pip install -r requirements.txt` (pinned versions; includes PySide6 and pywebview)
   Keep `simple_firearm_logbook.py`, `simple_firearm_logbook-UI.html`, the `fonts/`
-  folder, the `.ico`, `.png` and `-splash.png` together.
+  folder, the `.ico` and `.png` together.
 - Run from source: `python simple_firearm_logbook.py`
 - Build the .exe: `Build_Simple_Firearm_Logbook.bat` -> `dist\Simple Firearm Logbook\`
 
