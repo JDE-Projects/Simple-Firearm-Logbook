@@ -162,6 +162,11 @@ table.fw-table tbody tr.disposed-row:hover { opacity:.85; }
 .status-badge.st-lost, .status-badge.st-stolen {
   color:var(--red); background:color-mix(in srgb, var(--red) 18%, transparent);
 }
+.doc-badge {
+  display:inline-flex; align-items:center; gap:3px; font-size:10.5px; font-weight:600;
+  padding:2px 7px; border-radius:999px; color:var(--text-dim); background:var(--panel-2);
+  border:1px solid var(--border-2); white-space:nowrap;
+}
 .empty-hint { padding:40px 24px; text-align:center; color:var(--text-faint); font-size:13.5px; }
 
 /* ---- detail view ---- */
@@ -210,6 +215,19 @@ table.fw-table tbody tr.disposed-row:hover { opacity:.85; }
 }
 .photo-empty-hint { color:var(--text-faint); font-size:12.5px; }
 .dp-hint { font-size:11.5px; color:var(--text-dim); margin:-2px 0 14px; line-height:1.5; }
+
+/* ---- documents ---- */
+.gallery-head .panel-total { font-size:11.5px; font-weight:400; color:var(--text-faint); margin-left:8px; }
+.document-rows { display:flex; flex-direction:column; gap:8px; }
+.document-row {
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--panel-2);
+  padding:9px 12px;
+}
+.doc-info { display:flex; align-items:baseline; gap:10px; min-width:0; }
+.doc-label { font-size:13px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.doc-size { font-size:11.5px; color:var(--text-faint); flex:0 0 auto; }
+.doc-actions { display:flex; gap:6px; flex:0 0 auto; }
 
 /* ---- lightbox ---- */
 .lightbox-scrim { position:fixed; inset:0; background:rgba(0,0,0,.8); z-index:95; display:none; align-items:center; justify-content:center; }
@@ -347,6 +365,7 @@ table.fw-table tbody tr.disposed-row:hover { opacity:.85; }
             <th data-col="caliber" onclick="sortBy('caliber')">Caliber <span class="sort-arrow" id="arrow-caliber"></span></th>
             <th data-col="firearm_type" onclick="sortBy('firearm_type')">Type <span class="sort-arrow" id="arrow-firearm_type"></span></th>
             <th data-col="serial_number" onclick="sortBy('serial_number')">Serial <span class="sort-arrow" id="arrow-serial_number"></span></th>
+            <th>Docs</th>
             <th data-col="disposition_status" onclick="sortBy('disposition_status')">Status <span class="sort-arrow" id="arrow-disposition_status"></span></th>
           </tr>
         </thead>
@@ -402,6 +421,15 @@ table.fw-table tbody tr.disposed-row:hover { opacity:.85; }
         <div class="photo-grid" id="photoGrid"></div>
         <div class="photo-empty-hint" id="photoStarHint" style="display:none; margin-top:10px;">Click the star on a photo to make it the primary (the one used in lists and exports).</div>
         <div class="photo-empty-hint" id="photoEmptyHint" style="display:none;">No photos yet.</div>
+      </div>
+
+      <div class="detail-panel">
+        <div class="gallery-head">
+          <h3>Documents <span class="panel-total" id="docPanelTotal"></span></h3>
+          <button type="button" class="btn small" onclick="addAttachments()">Add document</button>
+        </div>
+        <div class="document-rows" id="documentRows"></div>
+        <div class="photo-empty-hint" id="documentEmptyHint" style="display:none;">No documents yet.</div>
       </div>
     </div>
   </div>
@@ -569,6 +597,48 @@ table.fw-table tbody tr.disposed-row:hover { opacity:.85; }
     </div>
   </div>
 
+  <!-- rename document modal -->
+  <div class="modal-scrim" id="renameAttachmentModalScrim">
+    <div class="modal">
+      <h3>Rename document</h3>
+      <div class="fld">
+        <label>Name</label>
+        <input id="ren-att-label" autocomplete="off">
+      </div>
+      <div class="err" id="ren-att-err"></div>
+      <div class="m-foot">
+        <button class="btn" onclick="closeRenameAttachmentModal()">Cancel</button>
+        <button class="btn primary" onclick="saveRenameAttachment()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- delete document modal -->
+  <div class="modal-scrim" id="deleteAttachmentModalScrim">
+    <div class="modal">
+      <h3>Delete this document?</h3>
+      <div class="m-msg">This can't be undone.</div>
+      <div class="m-foot">
+        <button class="btn" onclick="closeDeleteAttachmentModal()">Cancel</button>
+        <button class="btn danger" onclick="confirmDeleteAttachment()">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- large document confirm modal -->
+  <div class="modal-scrim" id="largeAttachmentModalScrim">
+    <div class="modal">
+      <h3>Large file(s)</h3>
+      <div class="m-msg">These files are large (over 25 MB). Add them anyway?<br>
+        <span class="m-detail" id="largeAttachmentList"></span>
+      </div>
+      <div class="m-foot">
+        <button class="btn" onclick="closeLargeAttachmentModal()">Cancel</button>
+        <button class="btn primary" onclick="confirmLargeAttachments()">Add anyway</button>
+      </div>
+    </div>
+  </div>
+
   <!-- full export modal -->
   <div class="modal-scrim" id="exportFullModalScrim">
     <div class="modal">
@@ -616,6 +686,7 @@ table.fw-table tbody tr.disposed-row:hover { opacity:.85; }
         <span class="dbg-track"></span>
         <span class="dbg-label">Debug log</span>
       </label>
+      <span id="attachmentsTotalLabel" class="dbg-label"></span>
     </div>
     <div class="bar-center">
       <span id="updateNotice"></span>
@@ -648,8 +719,12 @@ let sortCol = "log_number";
 let sortDir = "asc";
 let currentFirearm = null;
 let currentPhotos = [];
+let currentAttachments = [];
 let editingFirearmId = null;
 let pendingDeletePhotoId = null;
+let pendingDeleteAttachmentId = null;
+let pendingRenameAttachmentId = null;
+let pendingLargeAttachmentPaths = null;
 
 /* ---------- theme ---------- */
 let currentTheme = "dark";
@@ -675,6 +750,18 @@ function fmtPrice(s){
 }
 function valOrEmpty(html){
   return html ? html : '<span class="empty">Not set</span>';
+}
+// Mirrors format_size in simple_firearm_logbook.py: binary units (1024),
+// one decimal place at MB and up, none below that.
+function formatSize(numBytes){
+  const n = Number(numBytes) || 0;
+  if (n < 1024) return Math.trunc(n) + " B";
+  const kb = n / 1024;
+  if (kb < 1024) return Math.trunc(kb) + " KB";
+  const mb = kb / 1024;
+  if (mb < 1024) return mb.toFixed(1) + " MB";
+  const gb = mb / 1024;
+  return gb.toFixed(1) + " GB";
 }
 
 /* ---------- list view: load + render ---------- */
@@ -753,6 +840,9 @@ function renderTable(){
   $("fwTableBody").innerHTML = rows.map(f => {
     const disposed = f.disposition_status !== "Owned";
     const badge = disposed ? `<span class="status-badge ${statusClass(f.disposition_status)}">${esc(f.disposition_status)}</span>` : "";
+    const docBadge = f.attachment_count
+      ? `<span class="doc-badge" title="${esc(formatSize(f.attachment_bytes))}">${f.attachment_count} doc${f.attachment_count === 1 ? "" : "s"}</span>`
+      : "";
     return `<tr class="${disposed ? "disposed-row" : ""}" onclick="openDetail(${f.id})">
       <td class="col-lognum">${esc(f.log_number)}</td>
       <td>${esc(f.make)}</td>
@@ -760,6 +850,7 @@ function renderTable(){
       <td>${esc(f.caliber)}</td>
       <td>${esc(f.firearm_type)}</td>
       <td>${esc(f.serial_number)}</td>
+      <td>${docBadge}</td>
       <td>${badge}</td>
     </tr>`;
   }).join("");
@@ -786,6 +877,7 @@ function showListView(){
   $("listWrap").style.display = "flex";
   currentFirearm = null;
   currentPhotos = [];
+  currentAttachments = [];
   loadFirearms();
 }
 
@@ -869,6 +961,7 @@ async function openDetail(id){
   }
   currentFirearm = r.firearm;
   currentPhotos = r.photos;
+  currentAttachments = r.attachments || [];
   renderDetail();
   $("listWrap").style.display = "none";
   $("detailWrap").style.display = "flex";
@@ -916,6 +1009,7 @@ function renderDetail(){
   }
 
   renderGallery();
+  renderDocuments();
 }
 
 /* ---------- disposition modal ---------- */
@@ -1058,6 +1152,139 @@ async function setPrimaryPhoto(photoId){
   currentPhotos = r.photos;
   renderGallery();
   await loadFirearms();
+}
+
+/* ---------- documents ---------- */
+function renderDocuments(){
+  const rows = $("documentRows");
+  const hint = $("documentEmptyHint");
+  const total = currentAttachments.reduce((sum, a) => sum + (a.size_bytes || 0), 0);
+  $("docPanelTotal").textContent = currentAttachments.length ? `(${formatSize(total)})` : "";
+  if (!currentAttachments.length){
+    rows.innerHTML = "";
+    hint.style.display = "block";
+    return;
+  }
+  hint.style.display = "none";
+  rows.innerHTML = currentAttachments.map(a => `
+    <div class="document-row">
+      <div class="doc-info">
+        <span class="doc-label" title="${esc(a.label)}">${esc(a.label)}</span>
+        <span class="doc-size">${formatSize(a.size_bytes)}</span>
+      </div>
+      <div class="doc-actions">
+        <button type="button" class="btn small" onclick="openRenameAttachmentModal(${a.id})">Rename</button>
+        <button type="button" class="btn small danger" onclick="openDeleteAttachmentModal(${a.id})">Delete</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+async function loadAttachmentsTotal(){
+  if (!api()) return;
+  const r = await api().get_attachment_totals();
+  const el = $("attachmentsTotalLabel");
+  if (!el) return;
+  if (!r || !r.ok || !r.count){
+    el.textContent = "";
+    return;
+  }
+  el.textContent = `Attachments: ${formatSize(r.total_bytes)} in ${r.count} file${r.count === 1 ? "" : "s"}`;
+}
+
+async function addAttachments(){
+  if (!api() || !currentFirearm) return;
+  const picked = await api().choose_attachments();
+  if (!picked) return;
+  if (!picked.ok){
+    showToast(picked.error || "Couldn't open the file picker.");
+    return;
+  }
+  if (picked.cancelled || !picked.files || !picked.files.length) return;
+
+  const large = picked.files.filter(f => f.too_large);
+  const paths = picked.files.map(f => f.path);
+  if (large.length){
+    pendingLargeAttachmentPaths = paths;
+    $("largeAttachmentList").innerHTML = large.map(f => `${esc(f.name)} (${formatSize(f.size_bytes)})`).join("<br>");
+    $("largeAttachmentModalScrim").classList.add("open");
+    return;
+  }
+  await runAddAttachments(paths);
+}
+
+function closeLargeAttachmentModal(){
+  pendingLargeAttachmentPaths = null;
+  $("largeAttachmentModalScrim").classList.remove("open");
+}
+async function confirmLargeAttachments(){
+  const paths = pendingLargeAttachmentPaths;
+  closeLargeAttachmentModal();
+  if (paths) await runAddAttachments(paths);
+}
+
+async function runAddAttachments(paths){
+  const r = await api().add_attachments(currentFirearm.id, paths);
+  if (!r) return;
+  if (!r.ok){
+    showToast(r.error || "Couldn't add the file(s).");
+    return;
+  }
+  currentAttachments = r.attachments;
+  renderDocuments();
+  await loadFirearms();
+  await loadAttachmentsTotal();
+  if (r.warning) showToast(r.warning);
+}
+
+function openRenameAttachmentModal(attachmentId){
+  const a = currentAttachments.find(x => x.id === attachmentId);
+  if (!a) return;
+  pendingRenameAttachmentId = attachmentId;
+  $("ren-att-label").value = a.label;
+  $("ren-att-err").textContent = "";
+  $("renameAttachmentModalScrim").classList.add("open");
+  setTimeout(() => $("ren-att-label").focus(), 50);
+}
+function closeRenameAttachmentModal(){
+  pendingRenameAttachmentId = null;
+  $("renameAttachmentModalScrim").classList.remove("open");
+}
+async function saveRenameAttachment(){
+  if (!api() || !pendingRenameAttachmentId) return;
+  const errEl = $("ren-att-err");
+  errEl.textContent = "";
+  const r = await api().rename_attachment(pendingRenameAttachmentId, $("ren-att-label").value);
+  if (!r || !r.ok){
+    errEl.textContent = (r && r.error) || "Something went wrong.";
+    return;
+  }
+  currentAttachments = r.attachments;
+  closeRenameAttachmentModal();
+  renderDocuments();
+}
+
+function openDeleteAttachmentModal(attachmentId){
+  pendingDeleteAttachmentId = attachmentId;
+  $("deleteAttachmentModalScrim").classList.add("open");
+}
+function closeDeleteAttachmentModal(){
+  pendingDeleteAttachmentId = null;
+  $("deleteAttachmentModalScrim").classList.remove("open");
+}
+async function confirmDeleteAttachment(){
+  if (!api() || !pendingDeleteAttachmentId) { closeDeleteAttachmentModal(); return; }
+  const id = pendingDeleteAttachmentId;
+  closeDeleteAttachmentModal();
+  const r = await api().delete_attachment(id);
+  if (!r || !r.ok){
+    showToast((r && r.error) || "Couldn't delete the document.");
+    return;
+  }
+  currentAttachments = r.attachments;
+  renderDocuments();
+  await loadFirearms();
+  await loadAttachmentsTotal();
 }
 
 /* ---------- mark as owned (undo disposition) ---------- */
@@ -1220,7 +1447,7 @@ async function boot(){
   applyTheme(cfg.theme || "dark");
   $("verLabel").textContent = "v" + (STATE.version || "1.0.0");
 
-  await Promise.all([loadFirearms(), loadAutocomplete()]);
+  await Promise.all([loadFirearms(), loadAutocomplete(), loadAttachmentsTotal()]);
 
   // quiet startup update check, silent on failure
   const r = await api().check_update();

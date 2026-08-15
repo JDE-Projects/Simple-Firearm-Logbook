@@ -16,6 +16,7 @@ import errno
 import io
 import json
 import os
+import shutil
 import socket
 import sqlite3
 import ssl
@@ -28,12 +29,18 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 import webview
 from PIL import Image, ImageOps
 
+# Refuse to decode an image with more than ~64 megapixels instead of letting a
+# pixel-bomb file exhaust memory. Applies to every Image.open() call, so it
+# covers photo import everywhere in the app.
+Image.MAX_IMAGE_PIXELS = 64_000_000
+
 APP_VERSION = "1.4.0"
 GITHUB_OWNER = "JDE-Projects"
 GITHUB_REPO = "Simple-Firearm-Logbook"
 
 DB_FILENAME = "simple_firearm_logbook.db"
 PHOTOS_DIRNAME = "photos"
+ATTACHMENTS_DIRNAME = "attachments"
 SCHEMA_VERSION = 1
 
 DISPOSITION_STATUSES = ("Owned", "Sold", "Traded", "Lost", "Stolen", "Other")
@@ -46,6 +53,15 @@ IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".tif", ".
 # stays readable. Applied on import only; the user's original file is untouched.
 PHOTO_MAX_EDGE = 2400
 PHOTO_JPEG_QUALITY = 85
+
+# Decompression-bomb guard: refuse a source file bigger than this before ever
+# opening it, so a hostile or corrupt file can't be handed to PIL at all.
+MAX_IMAGE_BYTES = 50 * 1024 * 1024
+
+# Documents attach verbatim, never opened or recompressed. ATTACHMENT_WARN_BYTES
+# is a soft warning threshold only, not a hard cap.
+ATTACHMENT_WARN_BYTES = 25 * 1024 * 1024
+ATTACHMENT_LABEL_MAX = 100
 
 
 def resource_path(rel: str) -> str:
@@ -68,6 +84,37 @@ def sanitize_filename(name: str) -> str:
     """Strip characters that Windows doesn't allow in file names."""
     cleaned = "".join(c for c in name if c not in _INVALID_FILENAME_CHARS)
     return cleaned.strip()
+
+
+def format_size(num_bytes) -> str:
+    """Render a byte count as a short human string, binary units (1024).
+    One decimal place at MB and up, none below that."""
+    try:
+        n = float(num_bytes)
+    except (TypeError, ValueError):
+        n = 0.0
+    if n < 1024:
+        return f"{int(n)} B"
+    kb = n / 1024
+    if kb < 1024:
+        return f"{int(kb)} KB"
+    mb = kb / 1024
+    if mb < 1024:
+        return f"{mb:.1f} MB"
+    gb = mb / 1024
+    return f"{gb:.1f} GB"
+
+
+def _sanitize_attachment_label(raw: str) -> str:
+    """Sanitize and cap a document's display label. Shared by the import
+    default (built from the original filename) and rename_attachment."""
+    return sanitize_filename(raw or "")[:ATTACHMENT_LABEL_MAX]
+
+
+def _photo_source_too_large(path: str) -> bool:
+    """Decompression-bomb guard: refuse a photo source bigger than
+    MAX_IMAGE_BYTES before it is ever opened."""
+    return os.path.getsize(path) > MAX_IMAGE_BYTES
 
 
 # ---------------------------------------------------------------------------
@@ -171,6 +218,20 @@ def optimize_image_to_jpeg(src: str, target: str, max_edge: int = PHOTO_MAX_EDGE
 def _safe_photo_path(filename: str):
     """Resolve a photo's stored relative filename to a full path, refusing
     anything that would resolve outside the app folder (path traversal)."""
+    try:
+        base = os.path.realpath(app_dir())
+        full = os.path.realpath(os.path.join(app_dir(), filename))
+        if full != base and not full.startswith(base + os.sep):
+            return None
+        return full
+    except Exception:
+        return None
+
+
+def _safe_attachment_path(filename: str):
+    """Resolve a document's stored relative filename to a full path, refusing
+    anything that would resolve outside the app folder (path traversal).
+    Mirrors _safe_photo_path."""
     try:
         base = os.path.realpath(app_dir())
         full = os.path.realpath(os.path.join(app_dir(), filename))
@@ -395,6 +456,14 @@ def open_db(path: str) -> sqlite3.Connection:
             seq INTEGER NOT NULL,
             is_primary INTEGER NOT NULL DEFAULT 0
         );
+        CREATE TABLE IF NOT EXISTS attachments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            firearm_id INTEGER NOT NULL REFERENCES firearms(id),
+            filename TEXT NOT NULL,
+            label TEXT NOT NULL,
+            seq INTEGER NOT NULL,
+            size_bytes INTEGER NOT NULL DEFAULT 0
+        );
         CREATE TABLE IF NOT EXISTS counters (
             id INTEGER PRIMARY KEY CHECK (id = 1),
             next_log_number INTEGER NOT NULL
@@ -483,6 +552,10 @@ table.id-table td { padding:4px 0; font-size:13px; vertical-align:top; }
 .photo-item img { width:100%; height:auto; display:block; border-radius:4px; }
 .photo-item.missing { padding:24px 8px; }
 .photo-item.primary { border-color:#b8935a; }
+.document-block { margin-top:16px; padding-top:14px; border-top:1px solid #ddd; }
+.document-block h3 { margin:0 0 8px; font-size:14px; }
+.document-list { margin:0; padding-left:18px; font-size:13px; line-height:1.7; }
+.doc-size { color:#777; font-size:12px; }
 """
 
 # Fresh page per firearm, keep-together blocks, capped 2-per-row photo grid,
@@ -492,7 +565,7 @@ PRINT_CSS = """
   body { background:#ffffff !important; color:#111 !important; }
   .firearm-card { page-break-before: always; border:none; box-shadow:none; }
   .firearm-card:first-child { page-break-before: avoid; }
-  .identity-block, .notes-block, .disposition-block, .photo-block { break-inside: avoid; page-break-inside: avoid; }
+  .identity-block, .notes-block, .disposition-block, .photo-block, .document-block { break-inside: avoid; page-break-inside: avoid; }
   .photo-grid { grid-template-columns: repeat(2, 1fr) !important; }
   .photo-grid img { max-width: 260px !important; max-height: 260px !important; }
 }
@@ -596,13 +669,26 @@ def _render_photo_block_relative(photos: list) -> str:
     return f'<div class="photo-block"><h3>Photos</h3><div class="photo-grid">{"".join(items)}</div></div>'
 
 
-def _build_single_export_html(f: dict, photos_with_data: list) -> str:
+def _render_document_block(attachments: list) -> str:
+    """Documents are never embedded (arbitrary file types), so both the
+    single export and the full report just list each label and size."""
+    if not attachments:
+        return ""
+    items = "".join(
+        f'<li>{_esc_html(a["label"])} <span class="doc-size">({format_size(a["size_bytes"])})</span></li>'
+        for a in attachments
+    )
+    return f'<div class="document-block"><h3>Documents</h3><ul class="document-list">{items}</ul></div>'
+
+
+def _build_single_export_html(f: dict, photos_with_data: list, attachments: list) -> str:
     title = f"{f['log_number']} - {f['make']} {f['model']}"
     body = (
         _render_identity_block(f)
         + _render_disposition_block(f)
         + _render_notes_block(f)
         + _render_photo_block_embedded(photos_with_data)
+        + _render_document_block(attachments)
     )
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><title>{_esc_html(title)}</title>
@@ -614,15 +700,17 @@ def _build_single_export_html(f: dict, photos_with_data: list) -> str:
 </body></html>"""
 
 
-def _build_full_report_html(firearms: list, photos_by_firearm: dict) -> str:
+def _build_full_report_html(firearms: list, photos_by_firearm: dict, attachments_by_firearm: dict) -> str:
     cards = []
     for f in firearms:
         photos = photos_by_firearm.get(f["id"], [])
+        attachments = attachments_by_firearm.get(f["id"], [])
         body = (
             _render_identity_block(f)
             + _render_disposition_block(f)
             + _render_notes_block(f)
             + _render_photo_block_relative(photos)
+            + _render_document_block(attachments)
         )
         cards.append(f'<div class="firearm-card">{body}</div>')
     title = "Firearm Logbook Export"
@@ -811,6 +899,13 @@ class Api:
             for r in rows
         ]
 
+    def _attachment_stats(self, firearm_id):
+        row = self._conn.execute(
+            "SELECT COUNT(*) AS c, COALESCE(SUM(size_bytes), 0) AS b FROM attachments WHERE firearm_id=?",
+            (firearm_id,),
+        ).fetchone()
+        return row["c"], row["b"]
+
     def list_firearms(self):
         try:
             rows = self._conn.execute("SELECT * FROM firearms ORDER BY log_number").fetchall()
@@ -821,6 +916,9 @@ class Api:
                 primary = next((p for p in photos if p["is_primary"]), photos[0] if photos else None)
                 d["photo_count"] = len(photos)
                 d["primary_photo_filename"] = primary["filename"] if primary else None
+                attachment_count, attachment_bytes = self._attachment_stats(r["id"])
+                d["attachment_count"] = attachment_count
+                d["attachment_bytes"] = attachment_bytes
                 firearms.append(d)
             return {"ok": True, "firearms": firearms}
         except Exception as e:
@@ -832,7 +930,12 @@ class Api:
             row = self._get_firearm_row(firearm_id)
             if row is None:
                 return {"ok": False, "error": "That firearm no longer exists."}
-            return {"ok": True, "firearm": _firearm_row_to_dict(row), "photos": self._get_photos(firearm_id)}
+            return {
+                "ok": True,
+                "firearm": _firearm_row_to_dict(row),
+                "photos": self._get_photos(firearm_id),
+                "attachments": self._get_attachments(firearm_id),
+            }
         except Exception as e:
             self.log(f"get_firearm failed: {e}")
             return {"ok": False, "error": "Couldn't load that firearm."}
@@ -971,10 +1074,10 @@ class Api:
             return {"ok": False, "error": "Couldn't save the disposition."}
 
     def delete_firearm(self, firearm_id, export_backup_first=False):
-        """Delete a firearm and its photo files. The log number is never
-        reissued. If export_backup_first is set, a backup zip is produced
-        (with its own save dialog) before anything is deleted; cancelling
-        that save dialog cancels the whole delete."""
+        """Delete a firearm and its photo and document files. The log number
+        is never reissued. If export_backup_first is set, a backup zip is
+        produced (with its own save dialog) before anything is deleted;
+        cancelling that save dialog cancels the whole delete."""
         try:
             row = self._get_firearm_row(firearm_id)
             if row is None:
@@ -986,12 +1089,25 @@ class Api:
             photos = self._conn.execute(
                 "SELECT filename FROM photos WHERE firearm_id=?", (firearm_id,)
             ).fetchall()
+            attachments = self._conn.execute(
+                "SELECT filename FROM attachments WHERE firearm_id=?", (firearm_id,)
+            ).fetchall()
             cur = self._conn.cursor()
             cur.execute("DELETE FROM photos WHERE firearm_id=?", (firearm_id,))
+            # Foreign keys are enforced (PRAGMA foreign_keys = ON), so attachment
+            # rows must go before the firearm row, same as photos.
+            cur.execute("DELETE FROM attachments WHERE firearm_id=?", (firearm_id,))
             cur.execute("DELETE FROM firearms WHERE id=?", (firearm_id,))
             self._conn.commit()
             for p in photos:
                 full = _safe_photo_path(p["filename"])
+                if full:
+                    try:
+                        os.remove(full)
+                    except Exception:
+                        pass
+            for a in attachments:
+                full = _safe_attachment_path(a["filename"])
                 if full:
                     try:
                         os.remove(full)
@@ -1039,6 +1155,11 @@ class Api:
                     continue
                 ext = os.path.splitext(src)[1].lower()
                 if ext not in IMAGE_EXTENSIONS:
+                    continue
+                if _photo_source_too_large(src):
+                    # Refuse to even open it: never burns a sequence number.
+                    failed += 1
+                    self.log(f"Photo skipped, over the size limit: {src}")
                     continue
                 seq += 1
                 target_name = f"{row['log_number']}_{seq}.jpg"
@@ -1158,6 +1279,168 @@ class Api:
         except Exception:
             return {**p, "data_uri": None}
 
+    # --- attachments --------------------------------------------------------
+    def _get_attachments(self, firearm_id) -> list:
+        rows = self._conn.execute(
+            "SELECT id, filename, label, seq, size_bytes FROM attachments WHERE firearm_id=? ORDER BY seq",
+            (firearm_id,),
+        ).fetchall()
+        return [
+            {
+                "id": r["id"],
+                "filename": r["filename"],
+                "label": r["label"],
+                "seq": r["seq"],
+                "size_bytes": r["size_bytes"],
+            }
+            for r in rows
+        ]
+
+    def choose_attachments(self):
+        """Step one of the two-step add flow: opens a native multi-select file
+        picker (any file type) and reports back name/size/too_large for each
+        chosen file, without copying anything yet."""
+        try:
+            result = self._window.create_file_dialog(
+                webview.FileDialog.OPEN,
+                allow_multiple=True,
+                file_types=("All files (*.*)",),
+            )
+            if not result:
+                return {"ok": True, "cancelled": True}
+            paths = list(result) if isinstance(result, (list, tuple)) else [result]
+            files = []
+            for p in paths:
+                if not p or not os.path.isfile(p):
+                    continue
+                size_bytes = os.path.getsize(p)
+                files.append(
+                    {
+                        "path": p,
+                        "name": os.path.basename(p),
+                        "size_bytes": size_bytes,
+                        "too_large": size_bytes > ATTACHMENT_WARN_BYTES,
+                    }
+                )
+            return {"ok": True, "files": files}
+        except Exception as e:
+            self.log(f"choose_attachments failed: {e}")
+            return {"ok": False, "error": "Couldn't open the file picker."}
+
+    def add_attachments(self, firearm_id, paths):
+        """Copies the given file paths into attachments\\ verbatim (never
+        opened, recompressed, or validated as images) under the
+        {lognum}_{seq} naming scheme, and inserts a row per file with a
+        default label built from the original filename."""
+        try:
+            row = self._get_firearm_row(firearm_id)
+            if row is None:
+                return {"ok": False, "error": "That firearm no longer exists."}
+
+            attachments_dir = os.path.join(app_dir(), ATTACHMENTS_DIRNAME)
+            os.makedirs(attachments_dir, exist_ok=True)
+            cur = self._conn.cursor()
+            seq = cur.execute(
+                "SELECT COALESCE(MAX(seq), 0) FROM attachments WHERE firearm_id=?", (firearm_id,)
+            ).fetchone()[0]
+
+            added = 0
+            failed = 0
+            for src in paths or []:
+                if not src or not os.path.isfile(src):
+                    # Re-validate here: the picker ran earlier and the file may
+                    # have vanished since.
+                    failed += 1
+                    continue
+                ext = os.path.splitext(src)[1].lower()
+                seq += 1
+                target_name = f"{row['log_number']}_{seq}{ext}"
+                target_full = os.path.join(attachments_dir, target_name)
+                try:
+                    shutil.copy2(src, target_full)
+                    size_bytes = os.path.getsize(target_full)
+                except Exception as e:
+                    # Never store a half-written file, and don't burn a
+                    # sequence number on one that didn't make it in.
+                    seq -= 1
+                    failed += 1
+                    self.log(f"Attachment copy failed for {src}: {e}")
+                    try:
+                        if os.path.exists(target_full):
+                            os.remove(target_full)
+                    except Exception:
+                        pass
+                    continue
+                label = _sanitize_attachment_label(os.path.basename(src))
+                rel_name = f"{ATTACHMENTS_DIRNAME}/{target_name}"
+                cur.execute(
+                    "INSERT INTO attachments (firearm_id, filename, label, seq, size_bytes) VALUES (?, ?, ?, ?, ?)",
+                    (firearm_id, rel_name, label, seq, size_bytes),
+                )
+                added += 1
+            self._conn.commit()
+            self.log(f"Added {added} attachment(s) to firearm {row['log_number']}"
+                     + (f", {failed} failed" if failed else ""))
+            result = {"ok": True, "attachments": self._get_attachments(firearm_id), "added": added}
+            if failed:
+                # No silent failures: tell the user some files didn't make it.
+                result["warning"] = f"{failed} file(s) couldn't be added."
+            return result
+        except Exception as e:
+            self._conn.rollback()
+            self.log(f"add_attachments failed: {e}")
+            return {"ok": False, "error": "Couldn't add the file(s)."}
+
+    def rename_attachment(self, attachment_id, new_label):
+        try:
+            row = self._conn.execute("SELECT * FROM attachments WHERE id=?", (attachment_id,)).fetchone()
+            if row is None:
+                return {"ok": False, "error": "That document no longer exists."}
+            label = _sanitize_attachment_label(new_label)
+            if not label:
+                return {"ok": False, "error": "Enter a name."}
+            self._conn.execute("UPDATE attachments SET label=? WHERE id=?", (label, attachment_id))
+            self._conn.commit()
+            self.log(f"Renamed attachment {attachment_id}")
+            return {"ok": True, "attachments": self._get_attachments(row["firearm_id"])}
+        except Exception as e:
+            self._conn.rollback()
+            self.log(f"rename_attachment failed: {e}")
+            return {"ok": False, "error": "Couldn't rename the document."}
+
+    def delete_attachment(self, attachment_id):
+        try:
+            row = self._conn.execute("SELECT * FROM attachments WHERE id=?", (attachment_id,)).fetchone()
+            if row is None:
+                return {"ok": False, "error": "That document no longer exists."}
+            firearm_id = row["firearm_id"]
+            full = _safe_attachment_path(row["filename"])
+            self._conn.execute("DELETE FROM attachments WHERE id=?", (attachment_id,))
+            self._conn.commit()
+            if full:
+                try:
+                    os.remove(full)
+                except Exception:
+                    pass
+            self.log(f"Deleted attachment {attachment_id}")
+            return {"ok": True, "attachments": self._get_attachments(firearm_id)}
+        except Exception as e:
+            self._conn.rollback()
+            self.log(f"delete_attachment failed: {e}")
+            return {"ok": False, "error": "Couldn't delete the document."}
+
+    def get_attachment_totals(self):
+        """Global disk-use total across every firearm's documents, summed
+        from the stored size_bytes column (no filesystem scan)."""
+        try:
+            row = self._conn.execute(
+                "SELECT COUNT(*) AS c, COALESCE(SUM(size_bytes), 0) AS b FROM attachments"
+            ).fetchone()
+            return {"ok": True, "total_bytes": row["b"], "count": row["c"]}
+        except Exception as e:
+            self.log(f"get_attachment_totals failed: {e}")
+            return {"ok": False, "error": "Couldn't load the document totals."}
+
     # --- exports ------------------------------------------------------------
     def export_single_html(self, firearm_id):
         """Self-contained single-firearm export: one HTML file with photos
@@ -1168,7 +1451,8 @@ class Api:
                 return {"ok": False, "error": "That firearm no longer exists."}
             f = _firearm_row_to_dict(row)
             photos = [self._photo_with_data(p) for p in self._get_photos(firearm_id)]
-            html = _build_single_export_html(f, photos)
+            attachments = self._get_attachments(firearm_id)
+            html = _build_single_export_html(f, photos, attachments)
             default_name = sanitize_filename(f"{f['log_number']} {f['make']} {f['model']}.html")
             result = self._window.create_file_dialog(
                 webview.FileDialog.SAVE, save_filename=default_name, file_types=("HTML Files (*.html)",)
@@ -1201,7 +1485,8 @@ class Api:
                 return {"ok": False, "error": "That firearm no longer exists."}
             f = _firearm_row_to_dict(row)
             photos = self._get_photos(firearm_id)
-            html = _build_single_export_html(f, [self._photo_with_data(p) for p in photos])
+            attachments = self._get_attachments(firearm_id)
+            html = _build_single_export_html(f, [self._photo_with_data(p) for p in photos], attachments)
             default_name = sanitize_filename(f"{f['log_number']} {f['make']} {f['model']} backup.zip")
             result = self._window.create_file_dialog(
                 webview.FileDialog.SAVE, save_filename=default_name, file_types=("ZIP Files (*.zip)",)
@@ -1219,6 +1504,13 @@ class Api:
                     full = _safe_photo_path(p["filename"])
                     if full and os.path.isfile(full):
                         zf.write(full, arcname=os.path.basename(p["filename"]))
+                # Attachments are always fully included, unlike photos: they're
+                # the point of a backup. Kept in their own folder in the zip
+                # rather than flattened, since two files can share a basename.
+                for a in attachments:
+                    full = _safe_attachment_path(a["filename"])
+                    if full and os.path.isfile(full):
+                        zf.write(full, arcname=f"attachments/{os.path.basename(a['filename'])}")
             self.log(f"Exported backup zip for firearm {f['log_number']}")
             return {"ok": True, "path": path}
         except Exception as e:
@@ -1227,8 +1519,10 @@ class Api:
 
     def export_full(self, photo_depth="primary"):
         """Full collection export: one zip with an all-firearms HTML report,
-        a CSV of all fields, and a photos\\ folder. photo_depth controls how
-        many photos per firearm are included: 'primary', 'all', or 'none'."""
+        a CSV of all fields, a photos\\ folder, and an attachments\\ folder.
+        photo_depth controls how many photos per firearm are included:
+        'primary', 'all', or 'none'. Documents have no depth selector and are
+        always fully included; they're the point of the backup."""
         try:
             if photo_depth not in ("primary", "all", "none"):
                 photo_depth = "primary"
@@ -1236,6 +1530,7 @@ class Api:
             firearms = [_firearm_row_to_dict(r) for r in rows]
 
             photos_by_firearm = {}
+            attachments_by_firearm = {}
             files_to_include = []
             for fd in firearms:
                 photos = self._get_photos(fd["id"])
@@ -1249,7 +1544,11 @@ class Api:
                 photos_by_firearm[fd["id"]] = chosen
                 files_to_include.extend(p["filename"] for p in chosen)
 
-            html = _build_full_report_html(firearms, photos_by_firearm)
+                attachments = self._get_attachments(fd["id"])
+                attachments_by_firearm[fd["id"]] = attachments
+                files_to_include.extend(a["filename"] for a in attachments)
+
+            html = _build_full_report_html(firearms, photos_by_firearm, attachments_by_firearm)
             csv_text = _build_csv_text(firearms)
 
             stamp = datetime.date.today().strftime("%Y%m%d")
@@ -1269,7 +1568,8 @@ class Api:
                 # BOM so Excel opens the CSV as UTF-8
                 zf.writestr("data.csv", "\ufeff" + csv_text)
                 for filename in files_to_include:
-                    full = _safe_photo_path(filename)
+                    full = _safe_photo_path(filename) if filename.startswith(PHOTOS_DIRNAME + "/") \
+                        else _safe_attachment_path(filename)
                     if full and os.path.isfile(full):
                         zf.write(full, arcname=filename.replace("\\", "/"))
             self.log(f"Full export created, photo depth={photo_depth}, {len(firearms)} firearm(s)")
