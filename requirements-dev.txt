@@ -1,4 +1,4 @@
 # Pinned centrally in Build-Tools (templates/dev/requirements.txt). Do not bump
 # here: these change when this repo's Build-Tools workflow SHA is repointed.
-ruff==0.15.22
+ruff==0.16.1
 pytest==9.1.1
