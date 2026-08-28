@@ -1395,6 +1395,9 @@ function onPhotoDropZoneDragOver(e){
   $("photoDropZone").classList.add("dragover");
 }
 function onPhotoDropZoneDragLeave(e){
+  // Moving over the text or the Browse button inside the zone fires a
+  // dragleave; only drop the highlight when the pointer truly leaves the zone.
+  if (e.relatedTarget && $("photoDropZone").contains(e.relatedTarget)) return;
   $("photoDropZone").classList.remove("dragover");
 }
 function fileToBase64(file){
@@ -1429,6 +1432,12 @@ async function onPhotoDropZoneDrop(e){
   if (r.warning) showToast(r.warning);
   if (r.added > 0) closeAddPhotoModal();
 }
+
+// A file dropped anywhere except the drop zone should do nothing, not get
+// handed off to Windows and opened in another app. Swallow drops at the window
+// level; the drop zone's own handler still runs for files that land on it.
+window.addEventListener("dragover", e => e.preventDefault());
+window.addEventListener("drop", e => e.preventDefault());
 
 function openDeletePhotoModal(photoId){
   pendingDeletePhotoId = photoId;
