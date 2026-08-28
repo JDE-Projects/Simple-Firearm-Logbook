@@ -718,7 +718,7 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
   <div class="modal-scrim" id="addPhotoModalScrim">
     <div class="modal">
       <h3>Add photo</h3>
-      <div class="drop-zone" id="photoDropZone">
+      <div class="drop-zone" id="photoDropZone" ondragover="onPhotoDropZoneDragOver(event)" ondragleave="onPhotoDropZoneDragLeave(event)" ondrop="onPhotoDropZoneDrop(event)">
         <div class="dz-text">Drop image files here</div>
         <button type="button" class="btn primary" onclick="browsePhotosFromModal()">Browse files</button>
       </div>
@@ -1388,6 +1388,46 @@ function closeAddPhotoModal(){
 async function browsePhotosFromModal(){
   closeAddPhotoModal();
   await addPhotos();
+}
+
+function onPhotoDropZoneDragOver(e){
+  e.preventDefault(); // required so the drop event fires
+  $("photoDropZone").classList.add("dragover");
+}
+function onPhotoDropZoneDragLeave(e){
+  $("photoDropZone").classList.remove("dragover");
+}
+function fileToBase64(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.slice(reader.result.indexOf(",") + 1));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+async function onPhotoDropZoneDrop(e){
+  e.preventDefault();
+  $("photoDropZone").classList.remove("dragover");
+  if (!api() || !currentFirearm) return;
+  const dropped = e.dataTransfer.files;
+  if (!dropped || !dropped.length){
+    showToast("Drop image files, not text or links.");
+    return;
+  }
+  const files = await Promise.all(
+    Array.from(dropped).map(async f => ({name: f.name, data: await fileToBase64(f)}))
+  );
+  const r = await api().add_photos_from_data(currentFirearm.id, files);
+  if (!r) return;
+  if (!r.ok){
+    showToast(r.error || "Couldn't add the photo(s).");
+    return;
+  }
+  currentPhotos = r.photos;
+  renderGallery();
+  await loadFirearms();
+  if (r.warning) showToast(r.warning);
+  if (r.added > 0) closeAddPhotoModal();
 }
 
 function openDeletePhotoModal(photoId){
