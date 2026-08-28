@@ -1417,9 +1417,15 @@ async function onPhotoDropZoneDrop(e){
     showToast("Drop image files, not text or links.");
     return;
   }
-  const files = await Promise.all(
-    Array.from(dropped).map(async f => ({name: f.name, data: await fileToBase64(f)}))
-  );
+  let files;
+  try {
+    files = await Promise.all(
+      Array.from(dropped).map(async f => ({name: f.name, data: await fileToBase64(f)}))
+    );
+  } catch (err) {
+    showToast("Couldn't read one or more of those files. Nothing was added.");
+    return;
+  }
   const r = await api().add_photos_from_data(currentFirearm.id, files);
   if (!r) return;
   if (!r.ok){
