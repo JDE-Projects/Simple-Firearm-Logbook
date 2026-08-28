@@ -162,6 +162,12 @@ table.fw-table tbody tr.disposed-row:hover { opacity:.85; }
 .status-badge.st-lost, .status-badge.st-stolen {
   color:var(--red); background:color-mix(in srgb, var(--red) 18%, transparent);
 }
+.status-badge.badge-trust {
+  color:var(--accent); background:color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.status-badge.badge-nfa {
+  color:var(--text-dim); background:color-mix(in srgb, var(--text-dim) 16%, transparent);
+}
 .empty-hint { padding:40px 24px; text-align:center; color:var(--text-faint); font-size:13.5px; }
 
 /* ---- detail view ---- */
@@ -330,6 +336,16 @@ table.fw-table tbody tr.disposed-row:hover { opacity:.85; }
           <span class="sd-track"></span>
           <span>Show disposed firearms</span>
         </label>
+        <label class="show-disposed-toggle">
+          <input type="checkbox" id="trustFilterToggle" onchange="onTrustFilterChange()">
+          <span class="sd-track"></span>
+          <span>Trust only</span>
+        </label>
+        <label class="show-disposed-toggle">
+          <input type="checkbox" id="nfaFilterToggle" onchange="onNfaFilterChange()">
+          <span class="sd-track"></span>
+          <span>NFA only</span>
+        </label>
       </div>
       <div class="toolbar-right">
         <button type="button" class="btn" onclick="openExportFullModal()">Export all</button>
@@ -434,8 +450,79 @@ table.fw-table tbody tr.disposed-row:hover { opacity:.85; }
         </div>
         <div class="fld">
           <label>Type</label>
-          <input id="ff-type" list="typeList" autocomplete="off">
-          <datalist id="typeList"></datalist>
+          <select id="ff-type" onchange="onTypeChange()">
+            <option value="">(none)</option>
+            <option value="Pistol">Pistol</option>
+            <option value="Revolver">Revolver</option>
+            <option value="Rifle">Rifle</option>
+            <option value="Shotgun">Shotgun</option>
+            <option value="Receiver">Receiver</option>
+            <option value="Frame">Frame</option>
+            <option value="Suppressor">Suppressor</option>
+            <option value="Machinegun">Machinegun</option>
+            <option value="SBR">SBR</option>
+            <option value="SBS">SBS</option>
+            <option value="AOW">AOW</option>
+            <option value="Destructive Device">Destructive Device</option>
+            <option value="__other__">Other (specify)</option>
+          </select>
+        </div>
+        <div class="fld" id="ff-type-other-wrap" style="display:none;">
+          <label>Type (specify)</label>
+          <input id="ff-type-other" autocomplete="off">
+        </div>
+        <div class="fld">
+          <label>Sub-type</label>
+          <select id="ff-subtype" onchange="onSubtypeChange()">
+            <option value="">(none)</option>
+            <option value="Bolt">Bolt</option>
+            <option value="Lever">Lever</option>
+            <option value="Pump">Pump</option>
+            <option value="Semi-auto">Semi-auto</option>
+            <option value="Break">Break</option>
+            <option value="Single-shot">Single-shot</option>
+            <option value="Muzzleloader">Muzzleloader</option>
+            <option value="__other__">Other (type your own)</option>
+          </select>
+        </div>
+        <div class="fld" id="ff-subtype-other-wrap" style="display:none;">
+          <label>Sub-type (specify)</label>
+          <input id="ff-subtype-other" autocomplete="off">
+        </div>
+        <div class="fld span2">
+          <div class="checkbox-row">
+            <input type="checkbox" id="ff-trust" onchange="onTrustChange()">
+            <label for="ff-trust">Held in trust</label>
+          </div>
+        </div>
+        <div class="fld span2" id="ff-trust-name-wrap" style="display:none;">
+          <label>Trust name</label>
+          <input id="ff-trust-name" autocomplete="off">
+        </div>
+        <div class="fld span2">
+          <div class="checkbox-row">
+            <input type="checkbox" id="ff-nfa" onchange="onNfaChange()">
+            <label for="ff-nfa">NFA item</label>
+          </div>
+        </div>
+        <div class="fld span2" id="ff-nfa-fields" style="display:none;">
+          <div class="form-grid">
+            <div class="fld">
+              <label>NFA form type</label>
+              <input id="ff-nfa-form" list="nfaFormList" autocomplete="off">
+              <datalist id="nfaFormList">
+                <option value="Form 1">
+                <option value="Form 3">
+                <option value="Form 4">
+                <option value="Form 5">
+              </datalist>
+            </div>
+            <div class="fld">
+              <label>Tax stamp / approval date</label>
+              <input id="ff-nfa-date" type="date">
+            </div>
+          </div>
+          <!-- The stamped-document attachment (PDF upload) is deferred to a later feature. -->
         </div>
         <div class="fld">
           <label>Caliber</label>
@@ -642,8 +729,12 @@ function showToast(msg){
 let STATE = { version:"1.0.0", theme:"dark" };
 let FIREARMS = [];
 let AUTOCOMPLETE = { makes:[], calibers:[], types:[] };
+const FIREARM_TYPES = ["Pistol","Revolver","Rifle","Shotgun","Receiver","Frame","Suppressor","Machinegun","SBR","SBS","AOW","Destructive Device"];
+const SUBTYPES = ["Bolt","Lever","Pump","Semi-auto","Break","Single-shot","Muzzleloader"];
 let currentSearch = "";
 let showDisposed = false;
+let showTrustOnly = false;
+let showNfaOnly = false;
 let sortCol = "log_number";
 let sortDir = "asc";
 let currentFirearm = null;
@@ -692,7 +783,6 @@ async function loadAutocomplete(){
   AUTOCOMPLETE = r;
   $("makeList").innerHTML = r.makes.map(m => `<option value="${esc(m)}">`).join("");
   $("caliberList").innerHTML = r.calibers.map(c => `<option value="${esc(c)}">`).join("");
-  $("typeList").innerHTML = r.types.map(t => `<option value="${esc(t)}">`).join("");
 }
 
 function statusClass(status){
@@ -703,6 +793,12 @@ function visibleFirearms(){
   let rows = FIREARMS.slice();
   if (!showDisposed){
     rows = rows.filter(f => f.disposition_status === "Owned");
+  }
+  if (showTrustOnly){
+    rows = rows.filter(f => f.held_in_trust);
+  }
+  if (showNfaOnly){
+    rows = rows.filter(f => f.is_nfa);
   }
   const q = currentSearch.trim().toLowerCase();
   if (q){
@@ -752,7 +848,9 @@ function renderTable(){
   hint.style.display = "none";
   $("fwTableBody").innerHTML = rows.map(f => {
     const disposed = f.disposition_status !== "Owned";
-    const badge = disposed ? `<span class="status-badge ${statusClass(f.disposition_status)}">${esc(f.disposition_status)}</span>` : "";
+    let badge = disposed ? `<span class="status-badge ${statusClass(f.disposition_status)}">${esc(f.disposition_status)}</span>` : "";
+    if (f.held_in_trust) badge += ` <span class="status-badge badge-trust">Trust</span>`;
+    if (f.is_nfa) badge += ` <span class="status-badge badge-nfa">NFA</span>`;
     return `<tr class="${disposed ? "disposed-row" : ""}" onclick="openDetail(${f.id})">
       <td class="col-lognum">${esc(f.log_number)}</td>
       <td>${esc(f.make)}</td>
@@ -780,6 +878,14 @@ function onShowDisposedChange(){
   showDisposed = $("showDisposedToggle").checked;
   renderTable();
 }
+function onTrustFilterChange(){
+  showTrustOnly = $("trustFilterToggle").checked;
+  renderTable();
+}
+function onNfaFilterChange(){
+  showNfaOnly = $("nfaFilterToggle").checked;
+  renderTable();
+}
 
 function showListView(){
   $("detailWrap").style.display = "none";
@@ -793,7 +899,15 @@ function showListView(){
 function openAddFirearmModal(){
   editingFirearmId = null;
   $("firearmModalTitle").textContent = "Add firearm";
-  ["ff-make","ff-model","ff-serial","ff-type","ff-caliber","ff-acq-date","ff-acq-from","ff-price","ff-value","ff-insured","ff-storage","ff-notes"].forEach(id => $(id).value = "");
+  ["ff-make","ff-model","ff-serial","ff-type","ff-caliber","ff-acq-date","ff-acq-from","ff-price","ff-value","ff-insured","ff-storage","ff-notes",
+   "ff-subtype","ff-subtype-other","ff-trust-name","ff-nfa-form","ff-nfa-date"].forEach(id => $(id).value = "");
+  $("ff-type-other").value = "";
+  $("ff-trust").checked = false;
+  $("ff-nfa").checked = false;
+  onTypeChange();
+  onSubtypeChange();
+  onTrustChange();
+  onNfaChange();
   $("ff-err").textContent = "";
   loadAutocomplete();
   $("firearmModalScrim").classList.add("open");
@@ -806,7 +920,15 @@ function openEditFirearmModal(){
   $("ff-make").value = currentFirearm.make || "";
   $("ff-model").value = currentFirearm.model || "";
   $("ff-serial").value = currentFirearm.serial_number || "";
-  $("ff-type").value = currentFirearm.firearm_type || "";
+  const storedType = currentFirearm.firearm_type || "";
+  if (storedType && !FIREARM_TYPES.includes(storedType)){
+    $("ff-type").value = "__other__";
+    $("ff-type-other").value = storedType;
+  } else {
+    $("ff-type").value = storedType;
+    $("ff-type-other").value = "";
+  }
+  onTypeChange();
   $("ff-caliber").value = currentFirearm.caliber || "";
   $("ff-acq-date").value = currentFirearm.acquisition_date || "";
   $("ff-acq-from").value = currentFirearm.acquired_from || "";
@@ -815,6 +937,22 @@ function openEditFirearmModal(){
   $("ff-insured").value = currentFirearm.insured_value || "";
   $("ff-storage").value = currentFirearm.storage_location || "";
   $("ff-notes").value = currentFirearm.notes || "";
+  const storedSubtype = currentFirearm.sub_type || "";
+  if (storedSubtype && !SUBTYPES.includes(storedSubtype)){
+    $("ff-subtype").value = "__other__";
+    $("ff-subtype-other").value = storedSubtype;
+  } else {
+    $("ff-subtype").value = storedSubtype;
+    $("ff-subtype-other").value = "";
+  }
+  $("ff-trust").checked = !!currentFirearm.held_in_trust;
+  $("ff-trust-name").value = currentFirearm.trust_name || "";
+  $("ff-nfa").checked = !!currentFirearm.is_nfa;
+  $("ff-nfa-form").value = currentFirearm.nfa_form_type || "";
+  $("ff-nfa-date").value = currentFirearm.nfa_stamp_date || "";
+  onSubtypeChange();
+  onTrustChange();
+  onNfaChange();
   $("ff-err").textContent = "";
   loadAutocomplete();
   $("firearmModalScrim").classList.add("open");
@@ -822,15 +960,33 @@ function openEditFirearmModal(){
 function closeFirearmModal(){
   $("firearmModalScrim").classList.remove("open");
 }
+function onTypeChange(){
+  const other = $("ff-type").value === "__other__";
+  $("ff-type-other-wrap").style.display = other ? "block" : "none";
+}
+function onSubtypeChange(){
+  const other = $("ff-subtype").value === "__other__";
+  $("ff-subtype-other-wrap").style.display = other ? "block" : "none";
+}
+function onTrustChange(){
+  $("ff-trust-name-wrap").style.display = $("ff-trust").checked ? "block" : "none";
+}
+function onNfaChange(){
+  $("ff-nfa-fields").style.display = $("ff-nfa").checked ? "block" : "none";
+}
 async function saveFirearm(){
   if (!api()) return;
   const errEl = $("ff-err");
   errEl.textContent = "";
+  const effectiveType = $("ff-type").value === "__other__" ? $("ff-type-other").value.trim() : $("ff-type").value;
+  const effectiveSubtype = $("ff-subtype").value === "__other__" ? $("ff-subtype-other").value.trim() : $("ff-subtype").value;
   const fields = [
-    $("ff-make").value, $("ff-model").value, $("ff-serial").value, $("ff-type").value,
+    $("ff-make").value, $("ff-model").value, $("ff-serial").value, effectiveType,
     $("ff-caliber").value, $("ff-acq-date").value, $("ff-acq-from").value,
     $("ff-price").value, $("ff-value").value,
     $("ff-insured").value, $("ff-storage").value, $("ff-notes").value,
+    effectiveSubtype, $("ff-trust").checked ? 1 : 0, $("ff-trust-name").value,
+    $("ff-nfa").checked ? 1 : 0, $("ff-nfa-form").value, $("ff-nfa-date").value,
   ];
   let r;
   if (editingFirearmId){
@@ -880,8 +1036,9 @@ function renderDetail(){
   $("detailTitle").textContent = `${f.make} ${f.model}`;
   $("detailLogNum").textContent = "Log #" + f.log_number;
 
-  $("detailGrid").innerHTML = [
+  const detailFields = [
     fieldBlock("Type", f.firearm_type),
+    fieldBlock("Sub-type", f.sub_type),
     fieldBlock("Caliber", f.caliber),
     fieldBlock("Serial number", f.serial_number),
     fieldBlock("Acquisition date", f.acquisition_date),
@@ -890,7 +1047,15 @@ function renderDetail(){
     fieldBlockPrice("Estimated value", f.estimated_value),
     fieldBlockPrice("Insured value", f.insured_value),
     fieldBlock("Storage location", f.storage_location),
-  ].join("");
+  ];
+  if (f.held_in_trust){
+    detailFields.push(fieldBlock("Trust name", f.trust_name));
+  }
+  if (f.is_nfa){
+    detailFields.push(fieldBlock("NFA form type", f.nfa_form_type));
+    detailFields.push(fieldBlock("NFA stamp / approval date", f.nfa_stamp_date));
+  }
+  $("detailGrid").innerHTML = detailFields.join("");
 
   if (f.notes){
     $("detailNotesWrap").style.display = "block";

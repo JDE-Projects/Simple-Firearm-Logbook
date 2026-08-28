@@ -379,6 +379,12 @@ def open_db(path: str) -> sqlite3.Connection:
             insured_value TEXT NOT NULL DEFAULT '',
             storage_location TEXT NOT NULL DEFAULT '',
             notes TEXT NOT NULL DEFAULT '',
+            sub_type TEXT NOT NULL DEFAULT '',
+            held_in_trust INTEGER NOT NULL DEFAULT 0,
+            trust_name TEXT NOT NULL DEFAULT '',
+            is_nfa INTEGER NOT NULL DEFAULT 0,
+            nfa_form_type TEXT NOT NULL DEFAULT '',
+            nfa_stamp_date TEXT NOT NULL DEFAULT '',
             disposition_status TEXT NOT NULL DEFAULT 'Owned',
             disposition_date TEXT NOT NULL DEFAULT '',
             disposition_to TEXT NOT NULL DEFAULT '',
@@ -410,6 +416,12 @@ def open_db(path: str) -> sqlite3.Connection:
     # do not bump SCHEMA_VERSION.
     _ensure_column(conn, "firearms", "insured_value", "TEXT NOT NULL DEFAULT ''")
     _ensure_column(conn, "firearms", "storage_location", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "firearms", "sub_type", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "firearms", "held_in_trust", "INTEGER NOT NULL DEFAULT 0")
+    _ensure_column(conn, "firearms", "trust_name", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "firearms", "is_nfa", "INTEGER NOT NULL DEFAULT 0")
+    _ensure_column(conn, "firearms", "nfa_form_type", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "firearms", "nfa_stamp_date", "TEXT NOT NULL DEFAULT ''")
 
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.commit()
@@ -442,6 +454,12 @@ def _firearm_row_to_dict(r) -> dict:
         "insured_value": r["insured_value"],
         "storage_location": r["storage_location"],
         "notes": r["notes"],
+        "sub_type": r["sub_type"],
+        "held_in_trust": r["held_in_trust"],
+        "trust_name": r["trust_name"],
+        "is_nfa": r["is_nfa"],
+        "nfa_form_type": r["nfa_form_type"],
+        "nfa_stamp_date": r["nfa_stamp_date"],
         "disposition_status": r["disposition_status"],
         "disposition_date": r["disposition_date"],
         "disposition_to": r["disposition_to"],
@@ -521,6 +539,7 @@ def _render_identity_block(f: dict) -> str:
       <div class="log-num">Log #{_esc_html(f['log_number'])}</div>
       <table class="id-table">
         <tr><th>Type</th><td>{_esc_html(f['firearm_type']) or 'Not set'}</td></tr>
+        <tr><th>Sub-Type</th><td>{_esc_html(f['sub_type']) or 'Not set'}</td></tr>
         <tr><th>Caliber</th><td>{_esc_html(f['caliber']) or 'Not set'}</td></tr>
         <tr><th>Serial Number</th><td>{_esc_html(f['serial_number']) or 'Not set'}</td></tr>
         <tr><th>Acquisition Date</th><td>{_esc_html(f['acquisition_date']) or 'Not set'}</td></tr>
@@ -529,9 +548,24 @@ def _render_identity_block(f: dict) -> str:
         <tr><th>Estimated Value</th><td>{_fmt_price_html(f['estimated_value'])}</td></tr>
         <tr><th>Insured Value</th><td>{_fmt_price_html(f['insured_value'])}</td></tr>
         <tr><th>Storage Location</th><td>{_esc_html(f['storage_location']) or 'Not set'}</td></tr>
+        {_render_trust_nfa_rows(f)}
       </table>
     </div>
     """
+
+
+def _render_trust_nfa_rows(f: dict) -> str:
+    """Trust and NFA rows are left out entirely for an ordinary firearm, so
+    the identity table stays clean when neither applies."""
+    rows = []
+    if f["held_in_trust"]:
+        rows.append("<tr><th>Held In Trust</th><td>Yes</td></tr>")
+        rows.append(f"<tr><th>Trust Name</th><td>{_esc_html(f['trust_name']) or 'Not set'}</td></tr>")
+    if f["is_nfa"]:
+        rows.append("<tr><th>NFA</th><td>Yes</td></tr>")
+        rows.append(f"<tr><th>NFA Form Type</th><td>{_esc_html(f['nfa_form_type']) or 'Not set'}</td></tr>")
+        rows.append(f"<tr><th>NFA Stamp Date</th><td>{_esc_html(f['nfa_stamp_date']) or 'Not set'}</td></tr>")
+    return "".join(rows)
 
 
 def _render_disposition_block(f: dict) -> str:
@@ -644,9 +678,11 @@ def _build_csv_text(firearms: list) -> str:
     writer = csv.writer(buf)
     writer.writerow(
         [
-            "Log Number", "Make", "Model", "Serial Number", "Type", "Caliber",
+            "Log Number", "Make", "Model", "Serial Number", "Type", "Sub-Type", "Caliber",
             "Acquisition Date", "Acquired From", "Purchase Price", "Estimated Value",
-            "Insured Value", "Storage Location", "Notes",
+            "Insured Value", "Storage Location",
+            "Held In Trust", "Trust Name", "NFA", "NFA Form Type", "NFA Stamp Date",
+            "Notes",
             "Disposition Status", "Disposition Date", "Disposition To", "Disposition Address",
             "Disposition Amount", "Disposition Notes",
         ]
@@ -654,9 +690,13 @@ def _build_csv_text(firearms: list) -> str:
     for f in firearms:
         writer.writerow(
             [
-                f["log_number"], f["make"], f["model"], f["serial_number"], f["firearm_type"], f["caliber"],
+                f["log_number"], f["make"], f["model"], f["serial_number"], f["firearm_type"], f["sub_type"],
+                f["caliber"],
                 f["acquisition_date"], f["acquired_from"], f["purchase_price"], f["estimated_value"],
-                f["insured_value"], f["storage_location"], f["notes"],
+                f["insured_value"], f["storage_location"],
+                "Yes" if f["held_in_trust"] else "No", f["trust_name"],
+                "Yes" if f["is_nfa"] else "No", f["nfa_form_type"], f["nfa_stamp_date"],
+                f["notes"],
                 f["disposition_status"], f["disposition_date"], f["disposition_to"], f["disposition_address"],
                 f["disposition_amount"], f["disposition_notes"],
             ]
@@ -839,7 +879,9 @@ class Api:
 
     def create_firearm(self, make, model, serial_number="", firearm_type="", caliber="",
                         acquisition_date="", acquired_from="", purchase_price="",
-                        estimated_value="", insured_value="", storage_location="", notes=""):
+                        estimated_value="", insured_value="", storage_location="", notes="",
+                        sub_type="", held_in_trust=0, trust_name="", is_nfa=0,
+                        nfa_form_type="", nfa_stamp_date=""):
         try:
             make_s = (make or "").strip()
             model_s = (model or "").strip()
@@ -857,12 +899,25 @@ class Api:
             insured_s, err = parse_decimal_optional(insured_value)
             if err:
                 return {"ok": False, "error": err}
+            nfa_stamp_date_s, err = parse_iso_date_optional(nfa_stamp_date)
+            if err:
+                return {"ok": False, "error": err}
             serial_s = (serial_number or "").strip()
             type_s = (firearm_type or "").strip()
             caliber_s = (caliber or "").strip()
             acquired_from_s = (acquired_from or "").strip()
             storage_s = (storage_location or "").strip()
             notes_s = (notes or "").strip()
+            sub_type_s = (sub_type or "").strip()
+            held_in_trust_i = 1 if held_in_trust else 0
+            trust_name_s = (trust_name or "").strip()
+            is_nfa_i = 1 if is_nfa else 0
+            nfa_form_type_s = (nfa_form_type or "").strip()
+            if not held_in_trust_i:
+                trust_name_s = ""
+            if not is_nfa_i:
+                nfa_form_type_s = ""
+                nfa_stamp_date_s = ""
             now = datetime.datetime.now().isoformat(timespec="seconds")
             cur = self._conn.cursor()
             log_number = _get_next_log_number(cur)
@@ -870,11 +925,15 @@ class Api:
                 "INSERT INTO firearms (log_number, make, model, serial_number, firearm_type, caliber, "
                 "acquisition_date, acquired_from, purchase_price, estimated_value, "
                 "insured_value, storage_location, notes, "
+                "sub_type, held_in_trust, trust_name, is_nfa, nfa_form_type, nfa_stamp_date, "
                 "disposition_status, disposition_date, disposition_to, disposition_address, "
                 "disposition_amount, disposition_notes, created_at, updated_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Owned', '', '', '', '', '', ?, ?)",
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
+                "'Owned', '', '', '', '', '', ?, ?)",
                 (log_number, make_s, model_s, serial_s, type_s, caliber_s, date_s, acquired_from_s,
-                 price_s, value_s, insured_s, storage_s, notes_s, now, now),
+                 price_s, value_s, insured_s, storage_s, notes_s,
+                 sub_type_s, held_in_trust_i, trust_name_s, is_nfa_i, nfa_form_type_s, nfa_stamp_date_s,
+                 now, now),
             )
             new_id = cur.lastrowid
             self._conn.commit()
@@ -887,7 +946,9 @@ class Api:
 
     def update_firearm(self, firearm_id, make, model, serial_number="", firearm_type="", caliber="",
                         acquisition_date="", acquired_from="", purchase_price="",
-                        estimated_value="", insured_value="", storage_location="", notes=""):
+                        estimated_value="", insured_value="", storage_location="", notes="",
+                        sub_type="", held_in_trust=0, trust_name="", is_nfa=0,
+                        nfa_form_type="", nfa_stamp_date=""):
         """Edits identity/notes fields only; log number and disposition are
         untouched (disposition has its own editing action)."""
         try:
@@ -910,20 +971,36 @@ class Api:
             insured_s, err = parse_decimal_optional(insured_value)
             if err:
                 return {"ok": False, "error": err}
+            nfa_stamp_date_s, err = parse_iso_date_optional(nfa_stamp_date)
+            if err:
+                return {"ok": False, "error": err}
             serial_s = (serial_number or "").strip()
             type_s = (firearm_type or "").strip()
             caliber_s = (caliber or "").strip()
             acquired_from_s = (acquired_from or "").strip()
             storage_s = (storage_location or "").strip()
             notes_s = (notes or "").strip()
+            sub_type_s = (sub_type or "").strip()
+            held_in_trust_i = 1 if held_in_trust else 0
+            trust_name_s = (trust_name or "").strip()
+            is_nfa_i = 1 if is_nfa else 0
+            nfa_form_type_s = (nfa_form_type or "").strip()
+            if not held_in_trust_i:
+                trust_name_s = ""
+            if not is_nfa_i:
+                nfa_form_type_s = ""
+                nfa_stamp_date_s = ""
             now = datetime.datetime.now().isoformat(timespec="seconds")
             self._conn.execute(
                 "UPDATE firearms SET make=?, model=?, serial_number=?, firearm_type=?, caliber=?, "
                 "acquisition_date=?, acquired_from=?, purchase_price=?, estimated_value=?, "
                 "insured_value=?, storage_location=?, notes=?, "
+                "sub_type=?, held_in_trust=?, trust_name=?, is_nfa=?, nfa_form_type=?, nfa_stamp_date=?, "
                 "updated_at=? WHERE id=?",
                 (make_s, model_s, serial_s, type_s, caliber_s, date_s, acquired_from_s,
-                 price_s, value_s, insured_s, storage_s, notes_s, now, firearm_id),
+                 price_s, value_s, insured_s, storage_s, notes_s,
+                 sub_type_s, held_in_trust_i, trust_name_s, is_nfa_i, nfa_form_type_s, nfa_stamp_date_s,
+                 now, firearm_id),
             )
             self._conn.commit()
             self.log(f"Firearm {row['log_number']} updated")

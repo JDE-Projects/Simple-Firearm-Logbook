@@ -10,9 +10,11 @@ that need quoting" (embedded commas, embedded quotes, embedded newlines) and
 import simple_firearm_logbook as app
 
 _ALL_FIELDS = (
-    "log_number", "make", "model", "serial_number", "firearm_type", "caliber",
+    "log_number", "make", "model", "serial_number", "firearm_type", "sub_type", "caliber",
     "acquisition_date", "acquired_from", "purchase_price", "estimated_value",
-    "insured_value", "storage_location", "notes",
+    "insured_value", "storage_location",
+    "held_in_trust", "trust_name", "is_nfa", "nfa_form_type", "nfa_stamp_date",
+    "notes",
     "disposition_status", "disposition_date", "disposition_to", "disposition_address",
     "disposition_amount", "disposition_notes",
 )
@@ -33,8 +35,9 @@ def test_header_row_matches_expected_columns():
     text = app._build_csv_text([])
     header_line = text.splitlines()[0]
     assert header_line == (
-        "Log Number,Make,Model,Serial Number,Type,Caliber,Acquisition Date,"
+        "Log Number,Make,Model,Serial Number,Type,Sub-Type,Caliber,Acquisition Date,"
         "Acquired From,Purchase Price,Estimated Value,Insured Value,Storage Location,"
+        "Held In Trust,Trust Name,NFA,NFA Form Type,NFA Stamp Date,"
         "Notes,Disposition Status,Disposition Date,Disposition To,Disposition Address,"
         "Disposition Amount,Disposition Notes"
     )
@@ -56,6 +59,26 @@ def test_one_firearm_produces_one_data_row():
     lines = text.splitlines()
     assert len(lines) == 2
     assert lines[1].startswith("00001,Glock,19,")
+
+
+def test_header_and_row_have_the_same_column_count():
+    text = app._build_csv_text([_firearm(log_number="00001")])
+    lines = text.splitlines()
+    header_cols = len(lines[0].split(","))
+    row_cols = len(lines[1].split(","))
+    assert header_cols == row_cols
+
+
+def test_trust_and_nfa_flags_render_as_yes_no():
+    text = app._build_csv_text([
+        _firearm(log_number="00001", held_in_trust=1, is_nfa=0),
+        _firearm(log_number="00002", held_in_trust=0, is_nfa=1),
+    ])
+    lines = text.splitlines()
+    assert ",Yes," in lines[1]
+    assert ",No," in lines[1]
+    assert ",Yes," in lines[2]
+    assert ",No," in lines[2]
 
 
 def test_two_firearms_produce_two_data_rows_in_order():
