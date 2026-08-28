@@ -226,6 +226,41 @@ def optimize_image_to_jpeg(src: str, target: str, max_edge: int = PHOTO_MAX_EDGE
         img.save(target, "JPEG", quality=quality)
 
 
+def photo_failure_warning(fail_counts):
+    """Builds the user-facing warning for refused photos out of a
+    {"not_image": n, "damaged": n, "too_large": n} count dict, so add_photos
+    and add_photos_from_data always word it the same way. Returns None if
+    nothing was refused."""
+    not_image = fail_counts.get("not_image", 0)
+    damaged = fail_counts.get("damaged", 0)
+    too_large = fail_counts.get("too_large", 0)
+    total = not_image + damaged + too_large
+    if total == 0:
+        return None
+
+    buckets = [b for b in (("not_image", not_image), ("damaged", damaged), ("too_large", too_large)) if b[1]]
+    if len(buckets) == 1:
+        kind, n = buckets[0]
+        if kind == "not_image":
+            return (f"1 file wasn't an image and wasn't added." if n == 1
+                     else f"{n} files weren't images and weren't added.")
+        if kind == "damaged":
+            return (f"1 image was damaged and wasn't added." if n == 1
+                     else f"{n} images were damaged and weren't added.")
+        return (f"1 image was too large and wasn't added." if n == 1
+                 else f"{n} images were too large and weren't added.")
+
+    clauses = []
+    for kind, n in buckets:
+        if kind == "not_image":
+            clauses.append("1 wasn't an image" if n == 1 else f"{n} weren't images")
+        elif kind == "damaged":
+            clauses.append("1 was damaged" if n == 1 else f"{n} were damaged")
+        else:
+            clauses.append("1 was too large" if n == 1 else f"{n} were too large")
+    return f"{total} files weren't added: " + ", ".join(clauses) + "."
+
+
 def _safe_photo_path(filename: str):
     """Resolve a photo's stored relative filename to a full path, refusing
     anything that would resolve outside the app folder (path traversal)."""
@@ -1479,25 +1514,30 @@ class Api:
         source under the {lognum}_{seq}.jpg naming scheme, and makes the first
         photo added primary if the firearm has none yet. A source that fails
         never burns a sequence number. Does not commit: the caller commits
-        once after this returns. Returns (added, failed, seq, has_primary).
+        once after this returns. Returns (added, failed, seq, has_primary,
+        fail_counts), where fail_counts is a {"not_image": n, "damaged": n,
+        "too_large": n} dict tallying why each refused source failed.
         """
         photos_dir = os.path.join(app_dir(), PHOTOS_DIRNAME)
         os.makedirs(photos_dir, exist_ok=True)
 
         added = 0
         failed = 0
+        fail_counts = {"not_image": 0, "damaged": 0, "too_large": 0}
         for source in sources:
             label = source.get("label", "")
             if source.get("opener") is None:
                 # Already failed before reaching the optimize step: never
                 # burns a sequence number.
                 failed += 1
+                fail_counts[source.get("category", "damaged")] += 1
                 reason = source.get("skip_reason", "unreadable")
                 self.log(f"Photo skipped, {reason}: {label}")
                 continue
             if source.get("too_large"):
                 # Refuse to even open it: never burns a sequence number.
                 failed += 1
+                fail_counts["too_large"] += 1
                 self.log(f"Photo skipped, over the size limit: {label}")
                 continue
             seq += 1
@@ -1510,6 +1550,7 @@ class Api:
                 # a sequence number on one that didn't make it in.
                 seq -= 1
                 failed += 1
+                fail_counts["damaged"] += 1
                 self.log(f"Photo optimize failed for {label}: {e}")
                 try:
                     if os.path.exists(target_full):
@@ -1526,7 +1567,7 @@ class Api:
             if is_primary:
                 has_primary = True
             added += 1
-        return added, failed, seq, has_primary
+        return added, failed, seq, has_primary, fail_counts
 
     def add_photos(self, firearm_id):
         """Opens a native multi-select file picker, copies each chosen image
@@ -1569,18 +1610,17 @@ class Api:
                     "label": src,
                 })
 
-            added, failed, seq, has_primary = self._import_photo_sources(
+            added, failed, seq, has_primary, fail_counts = self._import_photo_sources(
                 firearm_id, row, cur, seq, has_primary, sources
             )
             self._conn.commit()
             self.log(f"Added {added} photo(s) to firearm {row['log_number']}"
                      + (f", {failed} failed" if failed else ""))
             result = {"ok": True, "photos": self._get_photos(firearm_id), "added": added}
-            if failed:
-                # No silent failures: tell the user some photos didn't make it.
-                result["warning"] = (
-                    f"{failed} photo(s) couldn't be read and were not added."
-                )
+            # No silent failures: tell the user some photos didn't make it.
+            warning = photo_failure_warning(fail_counts)
+            if warning:
+                result["warning"] = warning
             return result
         except Exception as e:
             self._conn.rollback()
@@ -1615,21 +1655,23 @@ class Api:
                 ext = os.path.splitext(name)[1].lower()
                 if ext not in IMAGE_EXTENSIONS:
                     sources.append({
-                        "opener": None, "label": label,
+                        "opener": None, "label": label, "category": "not_image",
                         "skip_reason": "not a supported image type",
                     })
                     continue
                 raw = f.get("data")
                 if not raw:
                     sources.append({
-                        "opener": None, "label": label, "skip_reason": "no data received",
+                        "opener": None, "label": label, "category": "damaged",
+                        "skip_reason": "no data received",
                     })
                     continue
                 try:
                     data = base64.b64decode(raw, validate=True)
                 except Exception:
                     sources.append({
-                        "opener": None, "label": label, "skip_reason": "couldn't decode",
+                        "opener": None, "label": label, "category": "damaged",
+                        "skip_reason": "couldn't decode",
                     })
                     continue
                 sources.append({
@@ -1638,18 +1680,17 @@ class Api:
                     "label": label,
                 })
 
-            added, failed, seq, has_primary = self._import_photo_sources(
+            added, failed, seq, has_primary, fail_counts = self._import_photo_sources(
                 firearm_id, row, cur, seq, has_primary, sources
             )
             self._conn.commit()
             self.log(f"Added {added} photo(s) to firearm {row['log_number']}"
                      + (f", {failed} failed" if failed else ""))
             result = {"ok": True, "photos": self._get_photos(firearm_id), "added": added}
-            if failed:
-                # No silent failures: tell the user some photos didn't make it.
-                result["warning"] = (
-                    f"{failed} photo(s) couldn't be read and were not added."
-                )
+            # No silent failures: tell the user some photos didn't make it.
+            warning = photo_failure_warning(fail_counts)
+            if warning:
+                result["warning"] = warning
             return result
         except Exception as e:
             self._conn.rollback()

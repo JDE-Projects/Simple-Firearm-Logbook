@@ -128,3 +128,44 @@ def test_first_photo_added_becomes_primary(tmp_path, monkeypatch):
         assert r["photos"][0]["is_primary"] is True
     finally:
         api.close_conn()
+
+
+def test_warning_names_a_non_image_file(tmp_path, monkeypatch):
+    api = _api(tmp_path, monkeypatch)
+    try:
+        fid = api.create_firearm("Glock", "19")["firearm_id"]
+        data = base64.b64encode(b"just some notes").decode("ascii")
+        r = api.add_photos_from_data(fid, [{"name": "notes.txt", "data": data}])
+        assert r["ok"], r
+        assert r["warning"] == "1 file wasn't an image and wasn't added."
+    finally:
+        api.close_conn()
+
+
+def test_warning_names_a_damaged_image(tmp_path, monkeypatch):
+    api = _api(tmp_path, monkeypatch)
+    try:
+        fid = api.create_firearm("Glock", "19")["firearm_id"]
+        # A supported extension, but the bytes underneath aren't a real image.
+        data = base64.b64encode(b"this is not image data").decode("ascii")
+        r = api.add_photos_from_data(fid, [{"name": "fake.jpg", "data": data}])
+        assert r["ok"], r
+        assert r["warning"] == "1 image was damaged and wasn't added."
+    finally:
+        api.close_conn()
+
+
+def test_warning_combines_a_non_image_and_a_damaged_image(tmp_path, monkeypatch):
+    api = _api(tmp_path, monkeypatch)
+    try:
+        fid = api.create_firearm("Glock", "19")["firearm_id"]
+        notes_data = base64.b64encode(b"just some notes").decode("ascii")
+        fake_data = base64.b64encode(b"this is not image data").decode("ascii")
+        r = api.add_photos_from_data(fid, [
+            {"name": "notes.txt", "data": notes_data},
+            {"name": "fake.jpg", "data": fake_data},
+        ])
+        assert r["ok"], r
+        assert r["warning"] == "2 files weren't added: 1 wasn't an image, 1 was damaged."
+    finally:
+        api.close_conn()
