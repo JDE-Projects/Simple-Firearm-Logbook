@@ -242,12 +242,12 @@ def photo_failure_warning(fail_counts):
     if len(buckets) == 1:
         kind, n = buckets[0]
         if kind == "not_image":
-            return (f"1 file wasn't an image and wasn't added." if n == 1
+            return ("1 file wasn't an image and wasn't added." if n == 1
                      else f"{n} files weren't images and weren't added.")
         if kind == "damaged":
-            return (f"1 image was damaged and wasn't added." if n == 1
+            return ("1 image was damaged and wasn't added." if n == 1
                      else f"{n} images were damaged and weren't added.")
-        return (f"1 image was too large and wasn't added." if n == 1
+        return ("1 image was too large and wasn't added." if n == 1
                  else f"{n} images were too large and weren't added.")
 
     clauses = []
