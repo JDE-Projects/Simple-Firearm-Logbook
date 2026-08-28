@@ -1,5 +1,5 @@
 # Simple Firearm Logbook
-A private, offline logbook for your personal firearm collection: records, photos, dispositions, and exports.
+A private, offline logbook for your personal firearm collection: records, photos, documents, dispositions, imports, and exports.
 Built by [JDE-Projects](https://github.com/JDE-Projects).
 
 If you enjoyed this project and would like to buy me a coffee, check out my [Ko-fi](https://ko-fi.com/jdeprojects).
@@ -13,14 +13,18 @@ If you enjoyed this project and would like to buy me a coffee, check out my [Ko-
 ## Highlights
 - Permanent log numbers that are never reused, even after a firearm is deleted.
 - Photo attachments for each firearm, with a starred primary photo used in lists and exports.
+- Document attachments for each firearm (receipts, permits, paperwork), with a count shown in the list.
+- NFA and trust tracking: flag NFA items (form type and stamp date) and firearms held in a trust, each shown as a badge in the list.
+- Search the list by make, model, type, status, and more, plus one-tap filters for NFA-only, trust-only, or hiding disposed firearms.
 - Disposition tracking (sold, traded, lost, stolen) that keeps the record instead of deleting it.
+- CSV import to bring in an existing collection, with a preview and per-row checks before anything is saved.
 - Single-firearm HTML export with embedded photos, ready to share or archive standalone.
 - Full-collection zip export: an HTML report, a CSV of every field, and the original photos.
 - Print-friendly export layout, independent of the app's own theme.
 - Fully offline: your collection data never leaves the machine.
 
 ## How it works
-- Backend: Python with SQLite (standard library). Data is stored in `simple_firearm_logbook.db` next to the exe, with photos copied into a `photos\` folder alongside it.
+- Backend: Python with SQLite (standard library). Data is stored in `simple_firearm_logbook.db` next to the exe, with photos copied into a `photos\` folder and documents into an `attachments\` folder alongside it.
 - Window: pywebview on the Qt backend, UI in simple_firearm_logbook-UI.html.
 
 ## Download and run
@@ -39,10 +43,10 @@ first time: More info > Run anyway.
 
 Simple Firearm Logbook doesn't update itself. The bottom bar has a **Check for updates** button that tells you when a newer release is out; when it does, get the new version from the [Releases](../../releases) page the same way you first installed it.
 
-- **Installer:** download the new `SimpleFirearmLogbook-vX.Y.Z-setup.exe` and run it. It installs over your current copy and keeps your logbook database and photos.
-- **Portable .zip:** download and extract the new `SimpleFirearmLogbook-vX.Y.Z.zip`. To keep your logbook database and photos, copy `simple_firearm_logbook.db`, the `photos\` folder, and the `.pref` file from the old folder into the new one.
+- **Installer:** download the new `SimpleFirearmLogbook-vX.Y.Z-setup.exe` and run it. It installs over your current copy and keeps your logbook database, photos, and documents.
+- **Portable .zip:** download and extract the new `SimpleFirearmLogbook-vX.Y.Z.zip`. To keep your logbook database, photos, and documents, copy `simple_firearm_logbook.db`, the `photos\` folder, the `attachments\` folder, and the `.pref` file from the old folder into the new one.
 
-Everything the app stores lives in the database and photos folder next to the exe, so there's nothing else to carry over.
+Everything the app stores lives in the database, the photos folder, and the attachments folder next to the exe, so there's nothing else to carry over.
 
 ## Verify this download (optional)
 This release was built on GitHub from this public source, not on a personal
@@ -66,13 +70,15 @@ pipeline from this repo. You can also check the file against the published
 - Build the .exe: `Build_Simple_Firearm_Logbook.bat` -> `dist\Simple Firearm Logbook\`
 
 ## Using it
-1. Add a firearm with its make, model, and whatever other details you know.
-2. Add photos to it, and star one as the primary photo.
-3. When a firearm leaves your collection, record a disposition (sold, traded, lost, or stolen) instead of deleting it.
-4. Export a single firearm to HTML, or export the full collection to a zip with a report, CSV, and photos, for backup or your own records.
+1. Add a firearm with its make, model, type, and whatever other details you know, including NFA or trust status.
+2. Add photos to it and star one as the primary photo, and attach documents like receipts or permits.
+3. Already have a collection in a spreadsheet? Import it from a CSV, review the preview, then save.
+4. Search or filter the list to find a firearm fast.
+5. When a firearm leaves your collection, record a disposition (sold, traded, lost, or stolen) instead of deleting it.
+6. Export a single firearm to HTML, or export the full collection to a zip with a report, CSV, and photos, for backup or your own records.
 
 ## Security and privacy
-- Everything is stored locally next to the exe: the database and the photos folder.
+- Everything is stored locally next to the exe: the database, the photos folder, and the attachments folder.
 - Nothing is sent anywhere.
 - The only network call is the version check against GitHub Releases.
 
