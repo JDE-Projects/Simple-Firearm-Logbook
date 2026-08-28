@@ -278,6 +278,11 @@ table.fw-table tbody tr.disposed-row:hover { opacity:.85; }
 .radio-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
 .radio-row input[type="radio"] { accent-color:var(--accent); cursor:pointer; width:15px; height:15px; flex:0 0 auto; }
 .radio-row label { font-size:13px; color:var(--text); cursor:pointer; user-select:none; }
+.drop-zone { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
+  border:2px dashed var(--border-2); border-radius:var(--radius-sm); padding:32px 20px; margin-bottom:18px;
+  text-align:center; }
+.drop-zone .dz-text { font-size:13px; color:var(--text-dim); }
+.drop-zone.dragover { border-color:var(--accent); background:var(--glow); }
 
 /* ---- CSV import wizard ---- */
 .modal.xwide { width:780px; }
@@ -457,7 +462,7 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
       <div class="detail-panel">
         <div class="gallery-head">
           <h3>Photos</h3>
-          <button type="button" class="btn small" onclick="addPhotos()">Add photo</button>
+          <button type="button" class="btn small" onclick="openAddPhotoModal()">Add photo</button>
         </div>
         <div class="photo-grid" id="photoGrid"></div>
         <div class="photo-empty-hint" id="photoStarHint" style="display:none; margin-top:10px;">Click the star on a photo to make it the primary (the one used in lists and exports).</div>
@@ -705,6 +710,20 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
       <div class="m-foot">
         <button class="btn" onclick="closeDeletePhotoModal()">Cancel</button>
         <button class="btn danger" onclick="confirmDeletePhoto()">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- add photo modal -->
+  <div class="modal-scrim" id="addPhotoModalScrim">
+    <div class="modal">
+      <h3>Add photo</h3>
+      <div class="drop-zone" id="photoDropZone">
+        <div class="dz-text">Drop image files here</div>
+        <button type="button" class="btn primary" onclick="browsePhotosFromModal()">Browse files</button>
+      </div>
+      <div class="m-foot">
+        <button class="btn" onclick="closeAddPhotoModal()">Cancel</button>
       </div>
     </div>
   </div>
@@ -1357,6 +1376,18 @@ async function addPhotos(){
   renderGallery();
   await loadFirearms();
   if (r.warning) showToast(r.warning);
+}
+
+function openAddPhotoModal(){
+  if (!api() || !currentFirearm) return;
+  $("addPhotoModalScrim").classList.add("open");
+}
+function closeAddPhotoModal(){
+  $("addPhotoModalScrim").classList.remove("open");
+}
+async function browsePhotosFromModal(){
+  closeAddPhotoModal();
+  await addPhotos();
 }
 
 function openDeletePhotoModal(photoId){
