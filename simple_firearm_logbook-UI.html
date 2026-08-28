@@ -532,6 +532,7 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
             <option value="Lever">Lever</option>
             <option value="Pump">Pump</option>
             <option value="Semi-auto">Semi-auto</option>
+            <option value="Automatic">Automatic</option>
             <option value="Break">Break</option>
             <option value="Single-shot">Single-shot</option>
             <option value="Muzzleloader">Muzzleloader</option>
@@ -861,7 +862,7 @@ let STATE = { version:"1.0.0", theme:"dark" };
 let FIREARMS = [];
 let AUTOCOMPLETE = { makes:[], calibers:[], types:[] };
 const FIREARM_TYPES = ["Pistol","Revolver","Rifle","Shotgun","Receiver","Frame","Suppressor","Machinegun","SBR","SBS","AOW","Destructive Device"];
-const SUBTYPES = ["Bolt","Lever","Pump","Semi-auto","Break","Single-shot","Muzzleloader"];
+const SUBTYPES = ["Bolt","Lever","Pump","Semi-auto","Automatic","Break","Single-shot","Muzzleloader"];
 let currentSearch = "";
 let showDisposed = false;
 let showTrustOnly = false;
