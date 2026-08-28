@@ -949,13 +949,24 @@ function visibleFirearms(){
   }
   const q = currentSearch.trim().toLowerCase();
   if (q){
-    rows = rows.filter(f =>
-      (f.log_number||"").toLowerCase().includes(q) ||
-      (f.make||"").toLowerCase().includes(q) ||
-      (f.model||"").toLowerCase().includes(q) ||
-      (f.serial_number||"").toLowerCase().includes(q) ||
-      (f.caliber||"").toLowerCase().includes(q)
-    );
+    rows = rows.filter(f => {
+      // Status search matches the same text the Status column shows: the
+      // disposition plus the Trust / NFA badge words, so anything visible
+      // there is findable. Sub-type and trust name are not columns, so they
+      // are deliberately not searched.
+      const statusText = [
+        f.disposition_status || "",
+        f.held_in_trust ? "Trust" : "",
+        f.is_nfa ? "NFA" : "",
+      ].join(" ").toLowerCase();
+      return (f.log_number||"").toLowerCase().includes(q) ||
+        (f.make||"").toLowerCase().includes(q) ||
+        (f.model||"").toLowerCase().includes(q) ||
+        (f.serial_number||"").toLowerCase().includes(q) ||
+        (f.caliber||"").toLowerCase().includes(q) ||
+        (f.firearm_type||"").toLowerCase().includes(q) ||
+        statusText.includes(q);
+    });
   }
   rows.sort((a, b) => {
     let av = (a[sortCol] || "").toString().toLowerCase();
