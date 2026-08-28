@@ -261,6 +261,30 @@ table.fw-table tbody tr.disposed-row:hover { opacity:.85; }
 .radio-row input[type="radio"] { accent-color:var(--accent); cursor:pointer; width:15px; height:15px; flex:0 0 auto; }
 .radio-row label { font-size:13px; color:var(--text); cursor:pointer; user-select:none; }
 
+/* ---- CSV import wizard ---- */
+.modal.xwide { width:780px; }
+.import-note { font-size:11.5px; color:var(--text-dim); margin:-6px 0 14px; line-height:1.5; }
+.import-map-grid { max-height:50vh; overflow:auto; margin-bottom:6px; border:1px solid var(--border); border-radius:var(--radius-sm); }
+.import-map-row { display:flex; align-items:center; gap:10px; padding:8px 12px; border-bottom:1px solid var(--border); }
+.import-map-row:last-child { border-bottom:none; }
+.import-map-row .imr-label { flex:0 0 170px; font-size:12.5px; color:var(--text); }
+.import-map-row .imr-label .req { color:var(--red); margin-left:3px; }
+.import-map-row select { flex:1; font-family:"Sora", sans-serif; font-size:13px; color:var(--text);
+  background:var(--panel-2); border:1px solid var(--border-2); border-radius:var(--radius-sm); padding:7px 9px; }
+.import-summary { font-size:12.5px; color:var(--text-dim); margin-bottom:10px; }
+.import-summary b { color:var(--text); }
+.import-preview-wrap { max-height:48vh; overflow:auto; border:1px solid var(--border); border-radius:var(--radius-sm); margin-bottom:10px; }
+table.import-preview-table { width:100%; border-collapse:collapse; font-size:12.5px; }
+table.import-preview-table thead th { position:sticky; top:0; background:var(--panel-2); text-align:left;
+  padding:7px 9px; font-size:10.5px; letter-spacing:.3px; color:var(--text-dim); border-bottom:1px solid var(--border); }
+table.import-preview-table tbody td { padding:6px 9px; border-bottom:1px solid var(--border); vertical-align:top; }
+table.import-preview-table tbody tr.row-error { opacity:.65; }
+.import-status { font-size:10.5px; font-weight:700; letter-spacing:.3px; padding:2px 7px; border-radius:999px; display:inline-block; }
+.import-status.ok { background:color-mix(in srgb, var(--green) 18%, transparent); color:var(--green); }
+.import-status.duplicate { background:color-mix(in srgb, var(--amber) 20%, transparent); color:var(--amber); }
+.import-status.error { background:color-mix(in srgb, var(--red) 18%, transparent); color:var(--red); }
+.import-reason { color:var(--text-dim); font-size:11.5px; margin-top:2px; }
+
 /* ---- toast (in-theme error banner, never a native alert) ---- */
 .toast {
   position:fixed; bottom:60px; left:50%; transform:translateX(-50%); z-index:100;
@@ -348,6 +372,7 @@ table.fw-table tbody tr.disposed-row:hover { opacity:.85; }
         </label>
       </div>
       <div class="toolbar-right">
+        <button type="button" class="btn" onclick="openImportModal()">Import</button>
         <button type="button" class="btn" onclick="openExportFullModal()">Export all</button>
         <button type="button" class="btn primary" onclick="openAddFirearmModal()">Add firearm</button>
       </div>
@@ -679,6 +704,41 @@ table.fw-table tbody tr.disposed-row:hover { opacity:.85; }
         <button class="btn" id="exportFullCancelBtn" onclick="closeExportFullModal()">Cancel</button>
         <button class="btn primary" id="exportFullGoBtn" onclick="runExportFull()">Export</button>
         <button class="btn primary" id="exportFullOkBtn" style="display:none;" onclick="closeExportFullModal()">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CSV import modal -->
+  <div class="modal-scrim" id="importModalScrim">
+    <div class="modal xwide">
+      <h3 id="importModalTitle">Import from CSV</h3>
+      <div class="m-msg" id="importModalMsg">Choose a CSV file, then map its columns to the fields below. Nothing is saved until you confirm.</div>
+      <div class="err" id="import-err"></div>
+
+      <div id="importMapStep" style="display:none;">
+        <div class="import-note" id="importMapNote"></div>
+        <div class="import-map-grid" id="importMapGrid"></div>
+      </div>
+
+      <div id="importPreviewStep" style="display:none;">
+        <div class="import-summary" id="importSummary"></div>
+        <div class="import-preview-wrap">
+          <table class="import-preview-table">
+            <thead><tr><th></th><th>Row</th><th>Make</th><th>Model</th><th>Serial</th><th>Status</th></tr></thead>
+            <tbody id="importPreviewBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="export-note" id="import-done-note" style="display:none;"></div>
+
+      <div class="m-foot">
+        <button class="btn" id="importCancelBtn" onclick="closeImportModal()">Cancel</button>
+        <button class="btn" id="importBackBtn" style="display:none;" onclick="importGoBack()">Back</button>
+        <button class="btn primary" id="importPickBtn" onclick="runImportPick()">Choose CSV file&hellip;</button>
+        <button class="btn primary" id="importNextBtn" style="display:none;" onclick="runImportPreview()">Next: Preview</button>
+        <button class="btn primary" id="importCommitBtn" style="display:none;" onclick="runImportCommit()">Import selected</button>
+        <button class="btn primary" id="importOkBtn" style="display:none;" onclick="closeImportModal()">OK</button>
       </div>
     </div>
   </div>
@@ -1325,6 +1385,186 @@ async function runExportFull(){
   $("exportFullCancelBtn").style.display = "none";
   $("exportFullGoBtn").style.display = "none";
   $("exportFullOkBtn").style.display = "";
+}
+
+/* ---------- CSV import wizard ---------- */
+// Three stages, each a clean stop: pick+read, map+validate, commit as one
+// batch. IMPORT.mapping is field_key -> header column index or null.
+// IMPORT.preview is the server's row-by-row verdict; IMPORT.accepted is the
+// set of row_num values the user has chosen to import (checkbox state).
+let IMPORT = { header: [], rows: [], mapping: {}, fields: [], preview: [], accepted: new Set() };
+
+function openImportModal(){
+  IMPORT = { header: [], rows: [], mapping: {}, fields: [], preview: [], accepted: new Set() };
+  $("importModalTitle").textContent = "Import from CSV";
+  $("importModalMsg").textContent = "Choose a CSV file, then map its columns to the fields below. Nothing is saved until you confirm.";
+  $("import-err").textContent = "";
+  $("importMapStep").style.display = "none";
+  $("importPreviewStep").style.display = "none";
+  $("import-done-note").style.display = "none";
+  $("importCancelBtn").style.display = "";
+  $("importCancelBtn").textContent = "Cancel";
+  $("importBackBtn").style.display = "none";
+  $("importPickBtn").style.display = "";
+  $("importNextBtn").style.display = "none";
+  $("importCommitBtn").style.display = "none";
+  $("importOkBtn").style.display = "none";
+  $("importModalScrim").classList.add("open");
+}
+function closeImportModal(){
+  $("importModalScrim").classList.remove("open");
+  if (IMPORT.imported) loadFirearms();
+}
+
+async function runImportPick(){
+  if (!api()) return;
+  const errEl = $("import-err");
+  errEl.textContent = "";
+  const r = await api().import_csv_pick();
+  if (!r) return;
+  if (!r.ok){ errEl.textContent = r.error || "Couldn't read that CSV file."; return; }
+  if (r.cancelled) return;
+  IMPORT.header = r.header;
+  IMPORT.rows = r.rows;
+  IMPORT.mapping = r.mapping;
+  IMPORT.fields = r.fields;
+  renderImportMapStep();
+}
+
+function renderImportMapStep(){
+  $("importModalTitle").textContent = "Map columns";
+  $("importModalMsg").textContent = `${IMPORT.rows.length} row(s) found. Match each field to a column from your file, or leave it as "(none)".`;
+  const hasLogNumber = IMPORT.header.some(h => (h || "").trim().toLowerCase() === "log number");
+  $("importMapNote").textContent = hasLogNumber
+    ? "A Log Number column was found but is never imported: the app always assigns its own."
+    : "";
+  const grid = $("importMapGrid");
+  grid.innerHTML = "";
+  for (const f of IMPORT.fields){
+    const row = document.createElement("div");
+    row.className = "import-map-row";
+    const required = f.key === "make" || f.key === "model";
+    const label = document.createElement("div");
+    label.className = "imr-label";
+    label.innerHTML = esc(f.label) + (required ? '<span class="req">*</span>' : "");
+    const select = document.createElement("select");
+    select.id = "immap-" + f.key;
+    let opts = '<option value="">(none)</option>';
+    IMPORT.header.forEach((h, i) => {
+      const sel = IMPORT.mapping[f.key] === i ? " selected" : "";
+      opts += `<option value="${i}"${sel}>${esc(h)}</option>`;
+    });
+    select.innerHTML = opts;
+    select.onchange = () => {
+      const v = select.value;
+      IMPORT.mapping[f.key] = v === "" ? null : parseInt(v, 10);
+    };
+    row.appendChild(label);
+    row.appendChild(select);
+    grid.appendChild(row);
+  }
+  $("importMapStep").style.display = "";
+  $("importPreviewStep").style.display = "none";
+  $("importPickBtn").style.display = "none";
+  $("importBackBtn").style.display = "none";
+  $("importNextBtn").style.display = "";
+  $("importCommitBtn").style.display = "none";
+}
+
+async function runImportPreview(){
+  if (!api()) return;
+  const errEl = $("import-err");
+  errEl.textContent = "";
+  if (IMPORT.mapping.make == null || IMPORT.mapping.model == null){
+    errEl.textContent = "Map Make and Model before continuing.";
+    return;
+  }
+  const r = await api().import_csv_preview(IMPORT.rows, IMPORT.mapping);
+  if (!r) return;
+  if (!r.ok){ errEl.textContent = r.error || "Couldn't validate that file."; return; }
+  IMPORT.preview = r.preview;
+  IMPORT.accepted = new Set(r.preview.filter(p => p.status !== "error").map(p => p.row_num));
+  renderImportPreviewStep();
+}
+
+function importRowCell(rowNum, fieldKey){
+  const row = IMPORT.rows.find(x => x.row_num === rowNum);
+  if (!row) return "";
+  const idx = IMPORT.mapping[fieldKey];
+  if (idx == null || idx < 0 || idx >= row.cells.length) return "";
+  return row.cells[idx] || "";
+}
+
+function renderImportPreviewStep(){
+  $("importModalTitle").textContent = "Preview and confirm";
+  $("importModalMsg").textContent = "Nothing is saved yet. Uncheck any row you don't want to import.";
+  const ok = IMPORT.preview.filter(p => p.status === "ok").length;
+  const dup = IMPORT.preview.filter(p => p.status === "duplicate").length;
+  const err = IMPORT.preview.filter(p => p.status === "error").length;
+  $("importSummary").innerHTML =
+    `<b>${IMPORT.preview.length}</b> row(s): <b>${ok}</b> ready, <b>${dup}</b> duplicate serial (soft warning), <b>${err}</b> with errors (never imported).`;
+  const body = $("importPreviewBody");
+  body.innerHTML = "";
+  for (const p of IMPORT.preview){
+    const tr = document.createElement("tr");
+    if (p.status === "error") tr.className = "row-error";
+    const make = p.record ? p.record.make : importRowCell(p.row_num, "make");
+    const model = p.record ? p.record.model : importRowCell(p.row_num, "model");
+    const serial = p.record ? p.record.serial_number : importRowCell(p.row_num, "serial_number");
+    const checked = p.status !== "error" && IMPORT.accepted.has(p.row_num);
+    const cb = p.status === "error"
+      ? ""
+      : `<input type="checkbox" ${checked ? "checked" : ""} onchange="toggleImportRow(${p.row_num}, this.checked)">`;
+    let statusHtml = `<span class="import-status ${p.status}">${p.status}</span>`;
+    if (p.reason){
+      statusHtml += `<div class="import-reason">${esc(p.reason)}${p.cell ? " (" + esc(p.cell) + ")" : ""}</div>`;
+    }
+    tr.innerHTML = `<td>${cb}</td><td>${p.row_num}</td><td>${esc(make)}</td><td>${esc(model)}</td><td>${esc(serial)}</td><td>${statusHtml}</td>`;
+    body.appendChild(tr);
+  }
+  $("importMapStep").style.display = "none";
+  $("importPreviewStep").style.display = "";
+  $("importBackBtn").style.display = "";
+  $("importNextBtn").style.display = "none";
+  $("importCommitBtn").style.display = "";
+}
+function toggleImportRow(rowNum, on){
+  if (on) IMPORT.accepted.add(rowNum); else IMPORT.accepted.delete(rowNum);
+}
+function importGoBack(){
+  $("import-err").textContent = "";
+  renderImportMapStep();
+}
+
+async function runImportCommit(){
+  if (!api()) return;
+  const errEl = $("import-err");
+  errEl.textContent = "";
+  const records = IMPORT.preview
+    .filter(p => p.status !== "error" && IMPORT.accepted.has(p.row_num) && p.record)
+    .map(p => p.record);
+  if (records.length === 0){
+    errEl.textContent = "No rows are selected to import.";
+    return;
+  }
+  const r = await api().import_csv_commit(records);
+  if (!r) return;
+  if (!r.ok){ errEl.textContent = r.error || "Couldn't import the file."; return; }
+  IMPORT.imported = true;
+  loadFirearms();
+  $("importModalTitle").textContent = "Import complete";
+  $("importModalMsg").textContent = "";
+  const note = $("import-done-note");
+  note.textContent = `Imported ${r.imported} firearm(s).`;
+  note.style.display = "block";
+  $("importMapStep").style.display = "none";
+  $("importPreviewStep").style.display = "none";
+  $("importCancelBtn").style.display = "none";
+  $("importBackBtn").style.display = "none";
+  $("importNextBtn").style.display = "none";
+  $("importCommitBtn").style.display = "none";
+  $("importOkBtn").style.display = "";
+  showToast(`Imported ${r.imported} firearm(s).`);
 }
 
 /* ---------- misc bridge helpers ---------- */
