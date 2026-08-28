@@ -1372,6 +1372,10 @@ async function addPhotos(){
     return;
   }
   if (r.cancelled) return;
+  await refreshPhotosFromResult(r);
+}
+
+async function refreshPhotosFromResult(r){
   currentPhotos = r.photos;
   renderGallery();
   await loadFirearms();
@@ -1432,10 +1436,7 @@ async function onPhotoDropZoneDrop(e){
     showToast(r.error || "Couldn't add the photo(s).");
     return;
   }
-  currentPhotos = r.photos;
-  renderGallery();
-  await loadFirearms();
-  if (r.warning) showToast(r.warning);
+  await refreshPhotosFromResult(r);
   if (r.added > 0) closeAddPhotoModal();
 }
 
@@ -1462,18 +1463,14 @@ async function confirmDeletePhoto(){
     showToast((r && r.error) || "Couldn't delete the photo.");
     return;
   }
-  currentPhotos = r.photos;
-  renderGallery();
-  await loadFirearms();
+  await refreshPhotosFromResult(r);
 }
 
 async function setPrimaryPhoto(photoId){
   if (!api()) return;
   const r = await api().set_primary_photo(photoId);
   if (!r || !r.ok) return;
-  currentPhotos = r.photos;
-  renderGallery();
-  await loadFirearms();
+  await refreshPhotosFromResult(r);
 }
 
 /* ---------- documents ---------- */

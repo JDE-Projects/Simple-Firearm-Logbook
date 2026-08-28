@@ -226,6 +226,32 @@ def optimize_image_to_jpeg(src: str, target: str, max_edge: int = PHOTO_MAX_EDGE
         img.save(target, "JPEG", quality=quality)
 
 
+# Wording for each refusal reason, used by photo_failure_warning below.
+# "single"/"plural" are the full sentence used when only one reason applies;
+# "clause_single"/"clause_plural" are the short fragment used when a warning
+# has to list more than one reason.
+_PHOTO_FAILURE_TEMPLATES = {
+    "not_image": {
+        "single": "1 file wasn't an image and wasn't added.",
+        "plural": "{n} files weren't images and weren't added.",
+        "clause_single": "1 wasn't an image",
+        "clause_plural": "{n} weren't images",
+    },
+    "damaged": {
+        "single": "1 image was damaged and wasn't added.",
+        "plural": "{n} images were damaged and weren't added.",
+        "clause_single": "1 was damaged",
+        "clause_plural": "{n} were damaged",
+    },
+    "too_large": {
+        "single": "1 image was too large and wasn't added.",
+        "plural": "{n} images were too large and weren't added.",
+        "clause_single": "1 was too large",
+        "clause_plural": "{n} were too large",
+    },
+}
+
+
 def photo_failure_warning(fail_counts):
     """Builds the user-facing warning for refused photos out of a
     {"not_image": n, "damaged": n, "too_large": n} count dict, so add_photos
@@ -241,23 +267,13 @@ def photo_failure_warning(fail_counts):
     buckets = [b for b in (("not_image", not_image), ("damaged", damaged), ("too_large", too_large)) if b[1]]
     if len(buckets) == 1:
         kind, n = buckets[0]
-        if kind == "not_image":
-            return ("1 file wasn't an image and wasn't added." if n == 1
-                     else f"{n} files weren't images and weren't added.")
-        if kind == "damaged":
-            return ("1 image was damaged and wasn't added." if n == 1
-                     else f"{n} images were damaged and weren't added.")
-        return ("1 image was too large and wasn't added." if n == 1
-                 else f"{n} images were too large and weren't added.")
+        template = _PHOTO_FAILURE_TEMPLATES[kind]
+        return template["single"] if n == 1 else template["plural"].format(n=n)
 
     clauses = []
     for kind, n in buckets:
-        if kind == "not_image":
-            clauses.append("1 wasn't an image" if n == 1 else f"{n} weren't images")
-        elif kind == "damaged":
-            clauses.append("1 was damaged" if n == 1 else f"{n} were damaged")
-        else:
-            clauses.append("1 was too large" if n == 1 else f"{n} were too large")
+        template = _PHOTO_FAILURE_TEMPLATES[kind]
+        clauses.append(template["clause_single"] if n == 1 else template["clause_plural"].format(n=n))
     return f"{total} files weren't added: " + ", ".join(clauses) + "."
 
 
@@ -1569,6 +1585,14 @@ class Api:
             added += 1
         return added, failed, seq, has_primary, fail_counts
 
+    def _photo_import_result(self, firearm_id, added, fail_counts):
+        result = {"ok": True, "photos": self._get_photos(firearm_id), "added": added}
+        # No silent failures: tell the user some photos didn't make it.
+        warning = photo_failure_warning(fail_counts)
+        if warning:
+            result["warning"] = warning
+        return result
+
     def add_photos(self, firearm_id):
         """Opens a native multi-select file picker, copies each chosen image
         into photos\\ under the {lognum}_{seq} naming scheme, and inserts a
@@ -1616,12 +1640,7 @@ class Api:
             self._conn.commit()
             self.log(f"Added {added} photo(s) to firearm {row['log_number']}"
                      + (f", {failed} failed" if failed else ""))
-            result = {"ok": True, "photos": self._get_photos(firearm_id), "added": added}
-            # No silent failures: tell the user some photos didn't make it.
-            warning = photo_failure_warning(fail_counts)
-            if warning:
-                result["warning"] = warning
-            return result
+            return self._photo_import_result(firearm_id, added, fail_counts)
         except Exception as e:
             self._conn.rollback()
             self.log(f"add_photos failed: {e}")
@@ -1686,12 +1705,7 @@ class Api:
             self._conn.commit()
             self.log(f"Added {added} photo(s) to firearm {row['log_number']}"
                      + (f", {failed} failed" if failed else ""))
-            result = {"ok": True, "photos": self._get_photos(firearm_id), "added": added}
-            # No silent failures: tell the user some photos didn't make it.
-            warning = photo_failure_warning(fail_counts)
-            if warning:
-                result["warning"] = warning
-            return result
+            return self._photo_import_result(firearm_id, added, fail_counts)
         except Exception as e:
             self._conn.rollback()
             self.log(f"add_photos_from_data failed: {e}")
