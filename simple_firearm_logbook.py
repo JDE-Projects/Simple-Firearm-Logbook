@@ -117,6 +117,14 @@ def _photo_source_too_large(path: str) -> bool:
     return os.path.getsize(path) > MAX_IMAGE_BYTES
 
 
+def _photo_bytes_too_large(data: bytes) -> bool:
+    """Decompression-bomb guard for raw bytes: refuse a photo source bigger
+    than MAX_IMAGE_BYTES before it is ever opened. Same ceiling as
+    _photo_source_too_large, for the drag-and-drop import path where the
+    source is already-decoded bytes rather than a file on disk."""
+    return len(data) > MAX_IMAGE_BYTES
+
+
 # ---------------------------------------------------------------------------
 # Field parsing helpers. Everything but make/model is optional, so blank
 # input is always accepted and passed through as an empty string rather
@@ -187,6 +195,9 @@ def optimize_image_to_jpeg(src: str, target: str, max_edge: int = PHOTO_MAX_EDGE
                            quality: int = PHOTO_JPEG_QUALITY) -> None:
     """Read an image, apply its stored EXIF rotation, scale the long edge down
     to max_edge if it is larger, and write the result to target as a JPEG.
+
+    src may be a path or a file-like object (e.g. io.BytesIO), since PIL's
+    Image.open accepts either. target is always a path.
 
     Never reads or writes anything but src (read) and target (write), so the
     user's original is always safe. Raises on any failure (unreadable file,
@@ -1448,6 +1459,75 @@ class Api:
             return {"ok": False, "error": "Couldn't delete the firearm."}
 
     # --- photos -----------------------------------------------------------------
+    def _import_photo_sources(self, firearm_id, row, cur, seq, has_primary, sources):
+        """Shared photo import loop, used by both add_photos (a file path per
+        source) and add_photos_from_data (raw bytes per source), so the naming
+        scheme, sequence numbering, and failure handling never drift between
+        the two entry points.
+
+        Each item in `sources` is a dict:
+          - "opener": what optimize_image_to_jpeg can open (a path or a
+            file-like object), or None if the source already failed before
+            reaching that step (bad extension, undecodable data, etc.);
+          - "too_large": True if the source has already been measured and is
+            over MAX_IMAGE_BYTES, so it must be refused before it is opened;
+          - "label": a name to use in log lines;
+          - "skip_reason": only used when "opener" is None, a short phrase
+            describing why for the log line.
+
+        Creates photos\\ if needed, inserts one row per successfully imported
+        source under the {lognum}_{seq}.jpg naming scheme, and makes the first
+        photo added primary if the firearm has none yet. A source that fails
+        never burns a sequence number. Does not commit: the caller commits
+        once after this returns. Returns (added, failed, seq, has_primary).
+        """
+        photos_dir = os.path.join(app_dir(), PHOTOS_DIRNAME)
+        os.makedirs(photos_dir, exist_ok=True)
+
+        added = 0
+        failed = 0
+        for source in sources:
+            label = source.get("label", "")
+            if source.get("opener") is None:
+                # Already failed before reaching the optimize step: never
+                # burns a sequence number.
+                failed += 1
+                reason = source.get("skip_reason", "unreadable")
+                self.log(f"Photo skipped, {reason}: {label}")
+                continue
+            if source.get("too_large"):
+                # Refuse to even open it: never burns a sequence number.
+                failed += 1
+                self.log(f"Photo skipped, over the size limit: {label}")
+                continue
+            seq += 1
+            target_name = f"{row['log_number']}_{seq}.jpg"
+            target_full = os.path.join(photos_dir, target_name)
+            try:
+                optimize_image_to_jpeg(source["opener"], target_full)
+            except Exception as e:
+                # Never store a broken or half-written photo, and don't burn
+                # a sequence number on one that didn't make it in.
+                seq -= 1
+                failed += 1
+                self.log(f"Photo optimize failed for {label}: {e}")
+                try:
+                    if os.path.exists(target_full):
+                        os.remove(target_full)
+                except Exception:
+                    pass
+                continue
+            rel_name = f"{PHOTOS_DIRNAME}/{target_name}"
+            is_primary = 1 if not has_primary else 0
+            cur.execute(
+                "INSERT INTO photos (firearm_id, filename, seq, is_primary) VALUES (?, ?, ?, ?)",
+                (firearm_id, rel_name, seq, is_primary),
+            )
+            if is_primary:
+                has_primary = True
+            added += 1
+        return added, failed, seq, has_primary
+
     def add_photos(self, firearm_id):
         """Opens a native multi-select file picker, copies each chosen image
         into photos\\ under the {lognum}_{seq} naming scheme, and inserts a
@@ -1465,8 +1545,6 @@ class Api:
                 return {"ok": True, "cancelled": True}
             paths = list(result) if isinstance(result, (list, tuple)) else [result]
 
-            photos_dir = os.path.join(app_dir(), PHOTOS_DIRNAME)
-            os.makedirs(photos_dir, exist_ok=True)
             cur = self._conn.cursor()
             seq = cur.execute(
                 "SELECT COALESCE(MAX(seq), 0) FROM photos WHERE firearm_id=?", (firearm_id,)
@@ -1475,45 +1553,25 @@ class Api:
                 "SELECT COUNT(*) FROM photos WHERE firearm_id=? AND is_primary=1", (firearm_id,)
             ).fetchone()[0] > 0
 
-            added = 0
-            failed = 0
+            # A source with an unsupported extension is filtered out here,
+            # silently, same as before the refactor: the file picker's own
+            # filter already keeps this from happening in normal use.
+            sources = []
             for src in paths:
                 if not src or not os.path.isfile(src):
                     continue
                 ext = os.path.splitext(src)[1].lower()
                 if ext not in IMAGE_EXTENSIONS:
                     continue
-                if _photo_source_too_large(src):
-                    # Refuse to even open it: never burns a sequence number.
-                    failed += 1
-                    self.log(f"Photo skipped, over the size limit: {src}")
-                    continue
-                seq += 1
-                target_name = f"{row['log_number']}_{seq}.jpg"
-                target_full = os.path.join(photos_dir, target_name)
-                try:
-                    optimize_image_to_jpeg(src, target_full)
-                except Exception as e:
-                    # Never store a broken or half-written photo, and don't burn
-                    # a sequence number on one that didn't make it in.
-                    seq -= 1
-                    failed += 1
-                    self.log(f"Photo optimize failed for {src}: {e}")
-                    try:
-                        if os.path.exists(target_full):
-                            os.remove(target_full)
-                    except Exception:
-                        pass
-                    continue
-                rel_name = f"{PHOTOS_DIRNAME}/{target_name}"
-                is_primary = 1 if not has_primary else 0
-                cur.execute(
-                    "INSERT INTO photos (firearm_id, filename, seq, is_primary) VALUES (?, ?, ?, ?)",
-                    (firearm_id, rel_name, seq, is_primary),
-                )
-                if is_primary:
-                    has_primary = True
-                added += 1
+                sources.append({
+                    "opener": src,
+                    "too_large": _photo_source_too_large(src),
+                    "label": src,
+                })
+
+            added, failed, seq, has_primary = self._import_photo_sources(
+                firearm_id, row, cur, seq, has_primary, sources
+            )
             self._conn.commit()
             self.log(f"Added {added} photo(s) to firearm {row['log_number']}"
                      + (f", {failed} failed" if failed else ""))
@@ -1527,6 +1585,75 @@ class Api:
         except Exception as e:
             self._conn.rollback()
             self.log(f"add_photos failed: {e}")
+            return {"ok": False, "error": "Couldn't add the photo(s)."}
+
+    def add_photos_from_data(self, firearm_id, files):
+        """Imports photos from raw bytes instead of a file path, for a
+        browser drag-and-drop drop of image data. `files` is a list of
+        {"name": <original filename>, "data": <base64-encoded contents>}
+        dicts. Shares the naming scheme, sequence numbering, and
+        first-photo-becomes-primary rule with add_photos via
+        _import_photo_sources, so nothing can drift between the two."""
+        try:
+            row = self._get_firearm_row(firearm_id)
+            if row is None:
+                return {"ok": False, "error": "That firearm no longer exists."}
+
+            cur = self._conn.cursor()
+            seq = cur.execute(
+                "SELECT COALESCE(MAX(seq), 0) FROM photos WHERE firearm_id=?", (firearm_id,)
+            ).fetchone()[0]
+            has_primary = cur.execute(
+                "SELECT COUNT(*) FROM photos WHERE firearm_id=? AND is_primary=1", (firearm_id,)
+            ).fetchone()[0] > 0
+
+            sources = []
+            for f in files or []:
+                f = f or {}
+                name = f.get("name") or ""
+                label = name or "(unnamed)"
+                ext = os.path.splitext(name)[1].lower()
+                if ext not in IMAGE_EXTENSIONS:
+                    sources.append({
+                        "opener": None, "label": label,
+                        "skip_reason": "not a supported image type",
+                    })
+                    continue
+                raw = f.get("data")
+                if not raw:
+                    sources.append({
+                        "opener": None, "label": label, "skip_reason": "no data received",
+                    })
+                    continue
+                try:
+                    data = base64.b64decode(raw, validate=True)
+                except Exception:
+                    sources.append({
+                        "opener": None, "label": label, "skip_reason": "couldn't decode",
+                    })
+                    continue
+                sources.append({
+                    "opener": io.BytesIO(data),
+                    "too_large": _photo_bytes_too_large(data),
+                    "label": label,
+                })
+
+            added, failed, seq, has_primary = self._import_photo_sources(
+                firearm_id, row, cur, seq, has_primary, sources
+            )
+            self._conn.commit()
+            self.log(f"Added {added} photo(s) to firearm {row['log_number']}"
+                     + (f", {failed} failed" if failed else ""))
+            result = {"ok": True, "photos": self._get_photos(firearm_id), "added": added}
+            if failed:
+                # No silent failures: tell the user some photos didn't make it.
+                result["warning"] = (
+                    f"{failed} photo(s) couldn't be read and were not added."
+                )
+            return result
+        except Exception as e:
+            self._conn.rollback()
+            self.log(f"add_photos_from_data failed: {e}")
             return {"ok": False, "error": "Couldn't add the photo(s)."}
 
     def delete_photo(self, photo_id):
