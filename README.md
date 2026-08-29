@@ -80,7 +80,7 @@ pipeline from this repo. You can also check the file against the published
 ## Security and privacy
 - Everything is stored locally next to the exe: the database, the photos folder, and the attachments folder.
 - Nothing is sent anywhere.
-- The only network call is the version check against GitHub Releases.
+- The only network call is the version check against GitHub Releases. It runs automatically once each time the app starts, and again whenever you press **Check for updates**. Nothing about your collection is sent, only a request for the latest release number.
 
 ## A note on how this was built
 This project was built with AI assistance. The design decisions, feature
