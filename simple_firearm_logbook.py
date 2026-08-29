@@ -16,6 +16,7 @@ import errno
 import io
 import json
 import os
+import re
 import shutil
 import socket
 import sqlite3
@@ -75,6 +76,16 @@ def app_dir() -> str:
     if getattr(sys, "frozen", False):
         return os.path.dirname(sys.executable)
     return os.path.dirname(os.path.abspath(__file__))
+
+
+_USERS_PATH_RE = re.compile(r"([\\/][Uu]sers[\\/])([^\\/]+)([\\/])")
+
+
+def _redact_username(text: str) -> str:
+    """Replace the username segment of any \\Users\\<name>\\ or
+    /Users/<name>/ path with the placeholder <user>, so log lines never
+    reveal who is running the app. Text with no such path is unchanged."""
+    return _USERS_PATH_RE.sub(lambda m: m.group(1) + "<user>" + m.group(3), text)
 
 
 _INVALID_FILENAME_CHARS = '<>:"/\\|?*'
@@ -1528,7 +1539,8 @@ class Api:
                         failed_paths.append(full)
             self.log(f"Firearm {row['log_number']} deleted")
             if failed_paths:
-                self.log(f"Firearm {row['log_number']} deleted, but these files could not be removed from disk: {failed_paths}")
+                failed_names = [os.path.basename(p) for p in failed_paths]
+                self.log(f"Firearm {row['log_number']} deleted, but these files could not be removed from disk: {failed_names}")
                 return {
                     "ok": True,
                     "warning": f"The record was deleted, but {len(failed_paths)} file(s) could not be removed from disk. See the log for details.",
@@ -1582,13 +1594,13 @@ class Api:
                 failed += 1
                 fail_counts[source.get("category", "damaged")] += 1
                 reason = source.get("skip_reason", "unreadable")
-                self.log(f"Photo skipped, {reason}: {label}")
+                self.log(f"Photo skipped, {reason}: {os.path.basename(label)}")
                 continue
             if source.get("too_large"):
                 # Refuse to even open it: never burns a sequence number.
                 failed += 1
                 fail_counts["too_large"] += 1
-                self.log(f"Photo skipped, over the size limit: {label}")
+                self.log(f"Photo skipped, over the size limit: {os.path.basename(label)}")
                 continue
             seq += 1
             target_name = f"{row['log_number']}_{seq}.jpg"
@@ -1601,7 +1613,7 @@ class Api:
                 seq -= 1
                 failed += 1
                 fail_counts["damaged"] += 1
-                self.log(f"Photo optimize failed for {label}: {e}")
+                self.log(f"Photo optimize failed for {os.path.basename(label)}: {e}")
                 try:
                     if os.path.exists(target_full):
                         os.remove(target_full)
@@ -1922,7 +1934,7 @@ class Api:
                     # sequence number on one that didn't make it in.
                     seq -= 1
                     failed += 1
-                    self.log(f"Attachment copy failed for {src}: {e}")
+                    self.log(f"Attachment copy failed for {os.path.basename(src)}: {e}")
                     try:
                         if os.path.exists(target_full):
                             os.remove(target_full)
@@ -2294,7 +2306,7 @@ class Api:
         try:
             ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             with open(self._debug_path, "a", encoding="utf-8") as f:
-                f.write(f"[{ts}] {msg}\n")
+                f.write(f"[{ts}] {_redact_username(msg)}\n")
         except Exception:
             pass
 
