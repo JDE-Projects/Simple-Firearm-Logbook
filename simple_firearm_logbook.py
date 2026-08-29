@@ -30,10 +30,12 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 import webview
 from PIL import Image, ImageOps
 
-# Refuse to decode an image with more than ~64 megapixels instead of letting a
-# pixel-bomb file exhaust memory. Applies to every Image.open() call, so it
-# covers photo import everywhere in the app.
-Image.MAX_IMAGE_PIXELS = 64_000_000
+# Pillow only raises DecompressionBombError above 2x this value (it just
+# warns between 1x and 2x), so setting this to 32,000,000 is what makes the
+# hard refusal actually land at the documented ~64 megapixels instead of
+# quietly doubling to ~128. Applies to every Image.open() call, so it covers
+# photo import everywhere in the app.
+Image.MAX_IMAGE_PIXELS = 32_000_000
 
 APP_VERSION = "1.6.0"
 GITHUB_OWNER = "JDE-Projects"
@@ -134,6 +136,14 @@ def _photo_bytes_too_large(data: bytes) -> bool:
     _photo_source_too_large, for the drag-and-drop import path where the
     source is already-decoded bytes rather than a file on disk."""
     return len(data) > MAX_IMAGE_BYTES
+
+
+def _photo_b64_too_large(raw: str) -> bool:
+    """Decompression-bomb guard for a still-encoded drag-and-drop payload:
+    estimate the decoded size from the base64 string length (a safe upper
+    bound, never smaller than the real decoded size) so an oversized drop is
+    refused before it is ever decoded into memory."""
+    return (len(raw) * 3) // 4 > MAX_IMAGE_BYTES
 
 
 # ---------------------------------------------------------------------------
@@ -1737,6 +1747,13 @@ class Api:
                     sources.append({
                         "opener": None, "label": label, "category": "damaged",
                         "skip_reason": "no data received",
+                    })
+                    continue
+                if _photo_b64_too_large(raw):
+                    # Refuse from the encoded length alone, before spending
+                    # the memory to base64-decode an oversized payload.
+                    sources.append({
+                        "opener": label, "too_large": True, "label": label,
                     })
                     continue
                 try:
