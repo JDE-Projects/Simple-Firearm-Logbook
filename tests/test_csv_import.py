@@ -324,3 +324,40 @@ def test_commit_with_no_records_is_an_error(tmp_path):
         assert r["ok"] is False
     finally:
         api.close_conn()
+
+
+# ─────────────────────────────────────────────────────────────
+#  _import_cell: reversing the export's CSV formula injection guard
+# ─────────────────────────────────────────────────────────────
+def test_import_cell_leaves_a_user_typed_leading_apostrophe_alone():
+    cells = ["'hello"]
+    mapping = {"notes": 0}
+    assert app._import_cell(cells, mapping, "notes") == "'hello"
+
+
+def test_import_cell_strips_apostrophe_added_ahead_of_a_dangerous_character():
+    for ch in app.CSV_FORMULA_LEAD_CHARS:
+        cells = [f"'{ch}cmd"]
+        mapping = {"notes": 0}
+        assert app._import_cell(cells, mapping, "notes") == f"{ch}cmd"
+
+
+def test_round_trip_through_export_and_import_restores_the_original_value():
+    header, mapping = _mapping_for(*_our_export_header())
+    firearm = {field: "" for field in [
+        "log_number", "make", "model", "serial_number", "firearm_type", "sub_type", "caliber",
+        "acquisition_date", "acquired_from", "purchase_price", "estimated_value",
+        "insured_value", "storage_location",
+        "held_in_trust", "trust_name", "is_nfa", "nfa_form_type", "nfa_stamp_date",
+        "notes",
+        "disposition_status", "disposition_date", "disposition_to", "disposition_address",
+        "disposition_amount", "disposition_notes",
+    ]}
+    firearm["make"] = "Glock"
+    firearm["model"] = "19"
+    firearm["notes"] = "=SUM(A1:A9)"
+    text = app._build_csv_text([firearm])
+    _, rows = app.read_import_csv_rows(text)
+    record, reason, cell = app.build_import_record(rows[0]["cells"], mapping)
+    assert reason is None, reason
+    assert record["notes"] == "=SUM(A1:A9)"

@@ -119,3 +119,21 @@ def test_plain_field_is_not_quoted():
 def test_rows_are_terminated_with_crlf():
     text = app._build_csv_text([_firearm()])
     assert "\r\n" in text
+
+
+# ─────────────────────────────────────────────────────────────
+#  CSV formula injection: dangerous leading characters get neutralized
+# ─────────────────────────────────────────────────────────────
+def test_normal_value_is_written_unchanged():
+    text = app._build_csv_text([_firearm(serial_number="ABC123")])
+    assert ",ABC123," in text
+    assert ",'ABC123," not in text
+
+
+def test_each_dangerous_leading_character_is_prefixed_with_an_apostrophe():
+    for ch in app.CSV_FORMULA_LEAD_CHARS:
+        value = f"{ch}cmd|' /C calc'!A1"
+        text = app._build_csv_text([_firearm(notes=value)])
+        # Notes is quoted by the csv writer since it may contain commas/etc,
+        # so look for the apostrophe-prefixed value inside the quoted field.
+        assert f"'{value}" in text, f"leading {ch!r} was not neutralized"
