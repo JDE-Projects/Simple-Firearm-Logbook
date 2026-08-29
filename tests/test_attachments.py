@@ -9,9 +9,13 @@ an editable display label separate from the stored filename. Covers:
   - format_size formatting across bytes / KB / MB / GB;
   - the import default label (sanitized, capped basename) and
     rename_attachment's sanitize + cap + empty-rejection;
-  - collision-free stored names across two attachments on the same firearm.
+  - collision-free stored names across two attachments on the same firearm;
+  - open_attachment: missing id, a missing file on disk (reported, not
+    deleted), the OS-handler success path, and the Explorer-reveal fallback
+    when there's no associated program.
 """
 
+import os
 import sqlite3
 
 import simple_firearm_logbook as app
@@ -173,6 +177,82 @@ def test_rename_attachment_rejects_empty_result(tmp_path, monkeypatch):
         r = api.rename_attachment(attachment_id, '<>:"/\\|?*')
         assert not r["ok"]
         assert r["error"] == "Enter a name."
+    finally:
+        api.close_conn()
+
+
+# ─────────────────────────────────────────────────────────────
+#  open_attachment
+# ─────────────────────────────────────────────────────────────
+def test_open_attachment_missing_id_returns_error(tmp_path, monkeypatch):
+    api = _api(tmp_path, monkeypatch)
+    try:
+        r = api.open_attachment(999)
+        assert not r["ok"]
+        assert r["error"] == "That document no longer exists."
+    finally:
+        api.close_conn()
+
+
+def test_open_attachment_reports_missing_file_without_deleting_it(tmp_path, monkeypatch):
+    api = _api(tmp_path, monkeypatch)
+    try:
+        fid = api.create_firearm("Glock", "19")["firearm_id"]
+        src = _make_file(tmp_path / "src" / "receipt.pdf")
+        added = api.add_attachments(fid, [src])
+        attachment_id = added["attachments"][0]["id"]
+        stored_full = tmp_path / added["attachments"][0]["filename"]
+        os.remove(stored_full)
+
+        r = api.open_attachment(attachment_id)
+        assert not r["ok"]
+        assert r["missing"] is True
+        assert r["label"] == "receipt.pdf"
+        assert "receipt.pdf" in r["error"]
+        # The row itself is untouched: the user removes it with Delete.
+        assert api._conn.execute(
+            "SELECT COUNT(*) FROM attachments WHERE id=?", (attachment_id,)
+        ).fetchone()[0] == 1
+    finally:
+        api.close_conn()
+
+
+def test_open_attachment_calls_startfile_on_success(tmp_path, monkeypatch):
+    api = _api(tmp_path, monkeypatch)
+    try:
+        fid = api.create_firearm("Glock", "19")["firearm_id"]
+        src = _make_file(tmp_path / "src" / "receipt.pdf")
+        added = api.add_attachments(fid, [src])
+        attachment_id = added["attachments"][0]["id"]
+
+        calls = []
+        monkeypatch.setattr(app.os, "startfile", lambda path: calls.append(path), raising=False)
+        r = api.open_attachment(attachment_id)
+        assert r == {"ok": True}
+        assert len(calls) == 1
+    finally:
+        api.close_conn()
+
+
+def test_open_attachment_falls_back_to_explorer_when_no_handler(tmp_path, monkeypatch):
+    api = _api(tmp_path, monkeypatch)
+    try:
+        fid = api.create_firearm("Glock", "19")["firearm_id"]
+        src = _make_file(tmp_path / "src" / "receipt.pdf")
+        added = api.add_attachments(fid, [src])
+        attachment_id = added["attachments"][0]["id"]
+
+        def _raise(path):
+            raise OSError("no associated application")
+        monkeypatch.setattr(app.os, "startfile", _raise, raising=False)
+        calls = []
+        monkeypatch.setattr(app.subprocess, "run", lambda args: calls.append(args))
+
+        r = api.open_attachment(attachment_id)
+        assert r == {"ok": True, "revealed": True}
+        assert len(calls) == 1
+        assert calls[0][0] == "explorer"
+        assert "/select," in calls[0]
     finally:
         api.close_conn()
 

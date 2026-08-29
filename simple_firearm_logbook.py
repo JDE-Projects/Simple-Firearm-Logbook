@@ -21,6 +21,7 @@ import shutil
 import socket
 import sqlite3
 import ssl
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -1999,6 +2000,39 @@ class Api:
             self._conn.rollback()
             self.log(f"rename_attachment failed: {e}")
             return {"ok": False, "error": "Couldn't rename the document."}
+
+    def open_attachment(self, attachment_id):
+        """Opens a document with the OS default handler. Falls back to
+        revealing it in File Explorer if there's no associated program."""
+        try:
+            row = self._conn.execute("SELECT * FROM attachments WHERE id=?", (attachment_id,)).fetchone()
+            if row is None:
+                return {"ok": False, "error": "That document no longer exists."}
+            full = _safe_attachment_path(row["filename"])
+            if full is None:
+                self.log(f"open_attachment failed: unsafe path for attachment {attachment_id}")
+                return {"ok": False, "error": "Couldn't open that document."}
+            if not os.path.isfile(full):
+                self.log(f"open_attachment: file missing for attachment {attachment_id}")
+                return {
+                    "ok": False,
+                    "missing": True,
+                    "label": row["label"],
+                    "error": f'"{row["label"]}" is missing from the app\'s attachments folder.',
+                }
+            try:
+                os.startfile(full)
+                self.log(f"Opened document {attachment_id}")
+                return {"ok": True}
+            except OSError:
+                # No associated program, or the OS refused: reveal it in
+                # Explorer instead so the user can still get to the file.
+                subprocess.run(["explorer", "/select,", full])
+                self.log(f"open_attachment: no default handler for attachment {attachment_id}, revealed in Explorer")
+                return {"ok": True, "revealed": True}
+        except Exception as e:
+            self.log(f"open_attachment failed: {e}")
+            return {"ok": False, "error": "Couldn't open that document."}
 
     def delete_attachment(self, attachment_id):
         try:

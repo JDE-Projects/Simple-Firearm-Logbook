@@ -1493,6 +1493,7 @@ function renderDocuments(){
         <span class="doc-size">${formatSize(a.size_bytes)}</span>
       </div>
       <div class="doc-actions">
+        <button type="button" class="btn small" onclick="openAttachment(${a.id})">Open</button>
         <button type="button" class="btn small" onclick="openRenameAttachmentModal(${a.id})">Rename</button>
         <button type="button" class="btn small danger" onclick="openDeleteAttachmentModal(${a.id})">Delete</button>
       </div>
@@ -1555,6 +1556,21 @@ async function runAddAttachments(paths){
   await loadFirearms();
   await loadAttachmentsTotal();
   if (r.warning) showToast(r.warning);
+}
+
+async function openAttachment(attachmentId){
+  if (!api()) return;
+  const r = await api().open_attachment(attachmentId);
+  if (!r) return;
+  if (r.ok){
+    if (r.revealed) showToast("No app is set for that file type. Opened its folder instead.");
+    return;
+  }
+  if (r.missing){
+    showToast(`That file is missing. Use Delete to remove "${esc(r.label || "")}" from the list.`);
+    return;
+  }
+  showToast(r.error || "Couldn't open the document.");
 }
 
 function openRenameAttachmentModal(attachmentId){
