@@ -582,9 +582,10 @@ def open_db(path: str) -> sqlite3.Connection:
 
 
 def _get_next_log_number(cur) -> str:
-    """Claim the next permanent log number, zero-padded to 5 digits, and
-    advance the counter. Never reused, even if the firearm this number was
-    claimed for is later deleted or the insert that claimed it fails."""
+    """Return the next log number, zero-padded to 5 digits, and advance the
+    counter. Numbers are simple sequential. The counter bump and the insert
+    share one transaction, so a rolled-back insert reuses the number. True
+    retired-number permanence is a Pro C&R bound-book feature, not free core."""
     row = cur.execute("SELECT next_log_number FROM counters WHERE id=1").fetchone()
     n = row["next_log_number"]
     cur.execute("UPDATE counters SET next_log_number=? WHERE id=1", (n + 1,))

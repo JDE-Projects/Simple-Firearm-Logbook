@@ -11,7 +11,7 @@ If you enjoyed this project and would like to buy me a coffee, check out my [Ko-
 </p>
 
 ## Highlights
-- Permanent log numbers that are never reused, even after a firearm is deleted.
+- Sequential 5-digit log numbers, assigned automatically to each firearm.
 - Photo attachments for each firearm: drag image files onto the add-photo window or browse for them, with a starred primary photo used in lists and exports.
 - Document attachments for each firearm (receipts, permits, paperwork), with a count shown in the list.
 - NFA and trust tracking: flag NFA items (form type and stamp date) and firearms held in a trust, each shown as a badge in the list.
@@ -75,7 +75,7 @@ pipeline from this repo. You can also check the file against the published
 3. Already have a collection in a spreadsheet? Import it from a CSV, review the preview, then save.
 4. Search or filter the list to find a firearm fast.
 5. When a firearm leaves your collection, record a disposition (sold, traded, lost, or stolen) instead of deleting it.
-6. Export a single firearm to HTML, or export the full collection to a zip with a report, CSV, and photos, for backup or your own records.
+6. Export a single firearm to HTML, or export the full collection to a zip with a report, CSV, and photos, for your own records.
 
 ## Security and privacy
 - Everything is stored locally next to the exe: the database, the photos folder, and the attachments folder.
