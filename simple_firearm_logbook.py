@@ -1488,21 +1488,28 @@ class Api:
             cur.execute("DELETE FROM attachments WHERE firearm_id=?", (firearm_id,))
             cur.execute("DELETE FROM firearms WHERE id=?", (firearm_id,))
             self._conn.commit()
+            failed_paths = []
             for p in photos:
                 full = _safe_photo_path(p["filename"])
                 if full:
                     try:
                         os.remove(full)
                     except Exception:
-                        pass
+                        failed_paths.append(full)
             for a in attachments:
                 full = _safe_attachment_path(a["filename"])
                 if full:
                     try:
                         os.remove(full)
                     except Exception:
-                        pass
+                        failed_paths.append(full)
             self.log(f"Firearm {row['log_number']} deleted")
+            if failed_paths:
+                self.log(f"Firearm {row['log_number']} deleted, but these files could not be removed from disk: {failed_paths}")
+                return {
+                    "ok": True,
+                    "warning": f"The record was deleted, but {len(failed_paths)} file(s) could not be removed from disk. See the log for details.",
+                }
             return {"ok": True}
         except Exception as e:
             self._conn.rollback()
@@ -1510,7 +1517,7 @@ class Api:
             return {"ok": False, "error": "Couldn't delete the firearm."}
 
     # --- photos -----------------------------------------------------------------
-    def _import_photo_sources(self, firearm_id, row, cur, seq, has_primary, sources):
+    def _import_photo_sources(self, firearm_id, row, cur, seq, has_primary, sources, written_paths):
         """Shared photo import loop, used by both add_photos (a file path per
         source) and add_photos_from_data (raw bytes per source), so the naming
         scheme, sequence numbering, and failure handling never drift between
@@ -1533,6 +1540,10 @@ class Api:
         once after this returns. Returns (added, failed, seq, has_primary,
         fail_counts), where fail_counts is a {"not_image": n, "damaged": n,
         "too_large": n} dict tallying why each refused source failed.
+
+        `written_paths` is a list the caller owns: each file this call
+        successfully writes to disk is appended to it, so the caller can
+        remove them if a later step (the commit) fails.
         """
         photos_dir = os.path.join(app_dir(), PHOTOS_DIRNAME)
         os.makedirs(photos_dir, exist_ok=True)
@@ -1574,6 +1585,7 @@ class Api:
                 except Exception:
                     pass
                 continue
+            written_paths.append(target_full)
             rel_name = f"{PHOTOS_DIRNAME}/{target_name}"
             is_primary = 1 if not has_primary else 0
             cur.execute(
@@ -1597,6 +1609,7 @@ class Api:
         """Opens a native multi-select file picker, copies each chosen image
         into photos\\ under the {lognum}_{seq} naming scheme, and inserts a
         row per photo. The first photo added becomes primary if none is set."""
+        written_paths = []
         try:
             row = self._get_firearm_row(firearm_id)
             if row is None:
@@ -1635,7 +1648,7 @@ class Api:
                 })
 
             added, failed, seq, has_primary, fail_counts = self._import_photo_sources(
-                firearm_id, row, cur, seq, has_primary, sources
+                firearm_id, row, cur, seq, has_primary, sources, written_paths
             )
             self._conn.commit()
             self.log(f"Added {added} photo(s) to firearm {row['log_number']}"
@@ -1643,6 +1656,11 @@ class Api:
             return self._photo_import_result(firearm_id, added, fail_counts)
         except Exception as e:
             self._conn.rollback()
+            for p in written_paths:
+                try:
+                    os.remove(p)
+                except Exception:
+                    pass
             self.log(f"add_photos failed: {e}")
             return {"ok": False, "error": "Couldn't add the photo(s)."}
 
@@ -1653,6 +1671,7 @@ class Api:
         dicts. Shares the naming scheme, sequence numbering, and
         first-photo-becomes-primary rule with add_photos via
         _import_photo_sources, so nothing can drift between the two."""
+        written_paths = []
         try:
             row = self._get_firearm_row(firearm_id)
             if row is None:
@@ -1700,7 +1719,7 @@ class Api:
                 })
 
             added, failed, seq, has_primary, fail_counts = self._import_photo_sources(
-                firearm_id, row, cur, seq, has_primary, sources
+                firearm_id, row, cur, seq, has_primary, sources, written_paths
             )
             self._conn.commit()
             self.log(f"Added {added} photo(s) to firearm {row['log_number']}"
@@ -1708,6 +1727,11 @@ class Api:
             return self._photo_import_result(firearm_id, added, fail_counts)
         except Exception as e:
             self._conn.rollback()
+            for p in written_paths:
+                try:
+                    os.remove(p)
+                except Exception:
+                    pass
             self.log(f"add_photos_from_data failed: {e}")
             return {"ok": False, "error": "Couldn't add the photo(s)."}
 
@@ -1855,6 +1879,7 @@ class Api:
 
             added = 0
             failed = 0
+            written_paths = []
             for src in paths or []:
                 if not src or not os.path.isfile(src):
                     # Re-validate here: the picker ran earlier and the file may
@@ -1867,6 +1892,7 @@ class Api:
                 target_full = os.path.join(attachments_dir, target_name)
                 try:
                     shutil.copy2(src, target_full)
+                    written_paths.append(target_full)
                     size_bytes = os.path.getsize(target_full)
                 except Exception as e:
                     # Never store a half-written file, and don't burn a
@@ -1897,6 +1923,11 @@ class Api:
             return result
         except Exception as e:
             self._conn.rollback()
+            for p in written_paths if 'written_paths' in locals() else []:
+                try:
+                    os.remove(p)
+                except Exception:
+                    pass
             self.log(f"add_attachments failed: {e}")
             return {"ok": False, "error": "Couldn't add the file(s)."}
 

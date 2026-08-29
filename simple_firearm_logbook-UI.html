@@ -1652,6 +1652,7 @@ async function confirmDeleteFirearm(){
     errEl.textContent = "Deletion cancelled.";
     return;
   }
+  if (r.warning) showToast(r.warning);
   closeDeleteFirearmModal();
   showListView();
 }
