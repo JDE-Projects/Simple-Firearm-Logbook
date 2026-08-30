@@ -1,6 +1,6 @@
 # Simple Firearm Logbook
 A private, offline logbook for your personal firearm collection: records, photos, documents, dispositions, imports, and exports.
-Built by [JDE-Projects](https://github.com/JDE-Projects).
+Built by [JDE-Projects](https://jde-projects.com), home of the Simple X Tools suite.
 
 If you enjoyed this project and would like to buy me a coffee, check out my [Ko-fi](https://ko-fi.com/jdeprojects).
 
@@ -80,7 +80,7 @@ pipeline from this repo. You can also check the file against the published
 ## Security and privacy
 - Everything is stored locally next to the exe: the database, the photos folder, and the attachments folder.
 - Nothing is sent anywhere.
-- The only network call is the version check against GitHub Releases. It runs automatically once each time the app starts, and again whenever you press **Check for updates**. Nothing about your collection is sent, only a request for the latest release number.
+- **Network use.** Other than the job you ask of it, this app makes one automatic network call: a check to GitHub for a newer release (at startup and when you press **Check for updates**), which sends only a version request. It collects and sends no personal data, usage data, or analytics.
 
 ## A note on how this was built
 This project was built with AI assistance. The design decisions, feature
