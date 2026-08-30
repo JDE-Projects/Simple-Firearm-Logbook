@@ -38,7 +38,7 @@ from PIL import Image, ImageOps
 # photo import everywhere in the app.
 Image.MAX_IMAGE_PIXELS = 32_000_000
 
-APP_VERSION = "1.6.1"
+APP_VERSION = "1.6.2"
 GITHUB_OWNER = "JDE-Projects"
 GITHUB_REPO = "Simple-Firearm-Logbook"
 
