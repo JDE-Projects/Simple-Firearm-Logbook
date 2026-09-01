@@ -423,6 +423,7 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
       </div>
       <div class="toolbar-right">
         <button type="button" class="btn" onclick="runBackup()">Backup</button>
+        <button type="button" class="btn" onclick="openRestoreModal()">Restore</button>
         <button type="button" class="btn" onclick="openImportModal()">Import</button>
         <button type="button" class="btn" onclick="openExportFullModal()">Export all</button>
         <button type="button" class="btn primary" onclick="openAddFirearmModal()">Add firearm</button>
@@ -874,6 +875,44 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
         <button class="btn primary" id="importNextBtn" style="display:none;" onclick="runImportPreview()">Next: Preview</button>
         <button class="btn primary" id="importCommitBtn" style="display:none;" onclick="runImportCommit()">Import selected</button>
         <button class="btn primary" id="importOkBtn" style="display:none;" onclick="closeImportModal()">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- restore wizard modal -->
+  <div class="modal-scrim" id="restoreModalScrim">
+    <div class="modal xwide">
+      <h3 id="restoreModalTitle">Restore from backup</h3>
+      <div class="m-msg" id="restoreModalMsg">Choose a backup zip made with the Backup button. This replaces your entire current logbook, so review the preview before confirming.</div>
+      <div class="err" id="restore-err"></div>
+
+      <div id="restorePreviewStep" style="display:none;">
+        <div class="import-summary" id="restoreSummary"></div>
+        <div class="export-note" id="restoreBlockedNote" style="display:none;"></div>
+        <div class="export-note" id="restoreIncompleteNote" style="display:none;"></div>
+        <div class="export-note" id="restoreIntegrityNote" style="display:none;"></div>
+      </div>
+
+      <div class="export-note" id="restore-done-note" style="display:none;"></div>
+
+      <div class="m-foot">
+        <button class="btn" id="restoreCancelBtn" onclick="closeRestoreModal()">Cancel</button>
+        <button class="btn primary" id="restorePickBtn" onclick="runRestorePick()">Choose backup file&hellip;</button>
+        <button class="btn danger" id="restoreProceedBtn" style="display:none;" onclick="runRestoreProceed()">Restore this backup</button>
+        <button class="btn primary" id="restoreOkBtn" style="display:none;" onclick="closeRestoreModal()">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- restore: back up current logbook first? -->
+  <div class="modal-scrim" id="restoreBackupFirstModalScrim">
+    <div class="modal">
+      <h3>Back up your current logbook first?</h3>
+      <div class="m-msg">You're about to replace your current logbook. Save a backup of it before restoring, just in case.</div>
+      <div class="m-foot">
+        <button class="btn" onclick="restoreBackupFirstChoice('cancel')">Cancel</button>
+        <button class="btn" onclick="restoreBackupFirstChoice('no')">No, restore now</button>
+        <button class="btn primary" onclick="restoreBackupFirstChoice('yes')">Yes, back up first</button>
       </div>
     </div>
   </div>
@@ -2027,6 +2066,133 @@ async function runImportCommit(){
   $("importCommitBtn").style.display = "none";
   $("importOkBtn").style.display = "";
   showToast(`Imported ${r.imported} firearm(s).`);
+}
+
+/* ---------- restore wizard ---------- */
+// Mirrors the CSV import wizard's shape: pick, preview, confirm, commit.
+// RESTORE.staging is the temp folder the backend unpacked the zip into; it
+// must be released with api().restore_cancel() if the wizard closes before
+// a commit happens, so the temp folder doesn't linger.
+let RESTORE = { staging: null, preview: null, committed: false };
+
+function openRestoreModal(){
+  RESTORE = { staging: null, preview: null, committed: false };
+  $("restoreModalTitle").textContent = "Restore from backup";
+  $("restoreModalMsg").textContent = "Choose a backup zip made with the Backup button. This replaces your entire current logbook, so review the preview before confirming.";
+  $("restore-err").textContent = "";
+  $("restorePreviewStep").style.display = "none";
+  $("restore-done-note").style.display = "none";
+  $("restoreCancelBtn").style.display = "";
+  $("restoreCancelBtn").textContent = "Cancel";
+  $("restorePickBtn").style.display = "";
+  $("restoreProceedBtn").style.display = "none";
+  $("restoreOkBtn").style.display = "none";
+  $("restoreModalScrim").classList.add("open");
+}
+function closeRestoreModal(){
+  $("restoreModalScrim").classList.remove("open");
+  if (RESTORE.staging && !RESTORE.committed && api()) api().restore_cancel();
+  if (RESTORE.committed) loadFirearms();
+}
+
+async function runRestorePick(){
+  if (!api()) return;
+  const errEl = $("restore-err");
+  errEl.textContent = "";
+  const r = await api().restore_pick();
+  if (!r) return;
+  if (!r.ok){ errEl.textContent = r.error || "Couldn't read that backup file."; return; }
+  if (r.cancelled) return;
+  RESTORE.staging = r.staging;
+  RESTORE.preview = r;
+  renderRestorePreviewStep();
+}
+
+function renderRestorePreviewStep(){
+  const p = RESTORE.preview;
+  $("restoreModalTitle").textContent = "Preview and confirm";
+  $("restoreModalMsg").textContent = "Nothing is changed yet.";
+  const c = p.counts || {};
+  $("restoreSummary").innerHTML =
+    `Backup made <b>${esc(p.created_at || "unknown date")}</b> with app version <b>${esc(p.app_version || "unknown")}</b>.<br>` +
+    `<b>${c.firearms||0}</b> firearm(s), <b>${c.photos||0}</b> photo(s), <b>${c.attachments||0}</b> document(s).`;
+
+  const blockedEl = $("restoreBlockedNote");
+  if (p.blocked){
+    blockedEl.textContent = p.block_reason || "This backup can't be restored.";
+    blockedEl.style.display = "block";
+  } else {
+    blockedEl.style.display = "none";
+  }
+
+  const incEl = $("restoreIncompleteNote");
+  if (p.incomplete && p.missing && p.missing.length){
+    incEl.innerHTML = `This backup itself is missing ${p.missing.length} file(s) it referenced:<span class="files">${p.missing.map(esc).join("<br>")}</span>`;
+    incEl.style.display = "block";
+  } else {
+    incEl.style.display = "none";
+  }
+
+  const integEl = $("restoreIntegrityNote");
+  if (!p.blocked && p.integrity_warnings && p.integrity_warnings.length){
+    integEl.innerHTML = `${p.integrity_warnings.length} file(s) in this backup are missing or don't match what the backup recorded, and will be skipped:<span class="files">${p.integrity_warnings.map(esc).join("<br>")}</span>`;
+    integEl.style.display = "block";
+  } else {
+    integEl.style.display = "none";
+  }
+
+  $("restorePreviewStep").style.display = "";
+  $("restorePickBtn").style.display = "none";
+  $("restoreProceedBtn").style.display = "";
+  $("restoreProceedBtn").disabled = !!p.blocked;
+  $("restoreOkBtn").style.display = "none";
+}
+
+function runRestoreProceed(){
+  if (!RESTORE.staging || RESTORE.preview.blocked) return;
+  $("restoreBackupFirstModalScrim").classList.add("open");
+}
+
+async function restoreBackupFirstChoice(choice){
+  $("restoreBackupFirstModalScrim").classList.remove("open");
+  if (choice === "cancel") return;
+  if (choice === "yes"){
+    if (!api()) return;
+    const r = await api().create_backup();
+    if (!r || r.cancelled || !r.ok){
+      $("restore-err").textContent = "Backup wasn't saved, so the restore was cancelled. Nothing was changed.";
+      return;
+    }
+  }
+  doRestoreCommit();
+}
+
+async function doRestoreCommit(){
+  if (!api()) return;
+  const errEl = $("restore-err");
+  errEl.textContent = "";
+  const r = await api().restore_commit();
+  if (!r) return;
+  if (!r.ok){
+    errEl.textContent = r.error || "Couldn't restore the backup.";
+    return;
+  }
+  RESTORE.committed = true;
+  loadFirearms();
+  loadAutocomplete();
+  loadAttachmentsTotal();
+  const c = r.counts || {};
+  $("restoreModalTitle").textContent = "Restore complete";
+  $("restoreModalMsg").textContent = "";
+  $("restorePreviewStep").style.display = "none";
+  const note = $("restore-done-note");
+  note.textContent = `Restored ${c.firearms||0} firearm(s), ${c.photos||0} photo(s), ${c.attachments||0} document(s).`;
+  note.style.display = "block";
+  $("restoreCancelBtn").style.display = "none";
+  $("restorePickBtn").style.display = "none";
+  $("restoreProceedBtn").style.display = "none";
+  $("restoreOkBtn").style.display = "";
+  showToast("Restore complete.");
 }
 
 /* ---------- misc bridge helpers ---------- */

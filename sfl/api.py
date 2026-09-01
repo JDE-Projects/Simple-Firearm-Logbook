@@ -2,14 +2,18 @@
 connection, window, debug flag/path) and delegates every method to a plain
 service function in sfl.services.*, passing that state through as explicit
 arguments. Methods return JSON-able dicts; the UI awaits."""
+import os
+import shutil
 import sqlite3
 
+from sfl import config, db, paths
 from sfl.services import attachments as attachments_service
 from sfl.services import backup as backup_service
 from sfl.services import export as export_service
 from sfl.services import firearms as firearms_service
 from sfl.services import imports as imports_service
 from sfl.services import photos as photos_service
+from sfl.services import restore as restore_service
 from sfl.services import settings as settings_service
 
 
@@ -21,6 +25,7 @@ class Api:
         self._conn = None
         self._debug = False
         self._debug_path = None
+        self._restore_staging = None
 
     def set_window(self, w):
         self._window = w
@@ -212,6 +217,48 @@ class Api:
         plus every photo and document file it references, with a manifest.
         Separate from the exports above, which are share/print output."""
         return backup_service.create_backup(self._conn, self._window, self.log)
+
+    # --- restore ----------------------------------------------------------------
+    def restore_pick(self):
+        """Stage 1: native picker restricted to .zip, then unpacks and
+        validates the chosen backup into a temp staging folder. Nothing is
+        replaced yet; the UI shows a preview next. Holds the staging path
+        on the Api until restore_commit or restore_cancel."""
+        result = restore_service.restore_pick(self._window, self.log)
+        if result.get("ok") and result.get("staging"):
+            self._restore_staging = result["staging"]
+        return result
+
+    def restore_commit(self):
+        """Stage 3: replaces the live database, photos, and attachments
+        with the staged backup's. The live connection is closed before the
+        file swap and reopened after, on the original database if the swap
+        was rolled back so the app is never left without a connection."""
+        if not self._restore_staging:
+            return {"ok": False, "error": "No backup is staged to restore."}
+        staging = self._restore_staging
+        self.close_conn()
+        result = restore_service.restore_commit(staging, self.log)
+        db_path = os.path.join(paths.app_dir(), config.DB_FILENAME)
+        try:
+            self.set_conn(db.open_db(db_path))
+        except Exception as e:
+            self.log(f"restore_commit: couldn't reopen the database: {e}")
+            if result.get("ok"):
+                result = {"ok": False, "error": "The restore finished but the app couldn't reopen the database. Restart the app."}
+        self._restore_staging = None
+        return result
+
+    def restore_cancel(self):
+        """Discards a staged backup the user picked but didn't commit, so
+        its temp folder doesn't linger."""
+        if self._restore_staging:
+            try:
+                shutil.rmtree(self._restore_staging, ignore_errors=True)
+            except Exception:
+                pass
+            self._restore_staging = None
+        return {"ok": True}
 
     # --- CSV import -----------------------------------------------------------
     def import_csv_pick(self):
