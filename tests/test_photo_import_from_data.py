@@ -20,16 +20,16 @@ import io
 from PIL import Image
 
 import simple_firearm_logbook as app
+from sfl import config, paths
 
 
 def _api(tmp_path, monkeypatch):
     # Route the photos folder into tmp_path instead of the real app folder
     # (app_dir() defaults to this repo's own directory when unfrozen).
-    monkeypatch.setattr(app, "app_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(paths, "app_dir", lambda: str(tmp_path))
     conn = app.open_db(str(tmp_path / "test.db"))
     api = app.Api()
     api.set_conn(conn)
-    api.set_db_path(str(tmp_path / "test.db"))
     return api
 
 
@@ -71,7 +71,7 @@ def test_oversize_source_is_refused_without_burning_a_sequence_number(tmp_path, 
         # Make the ceiling small enough that the real encoded image trips it,
         # scoped to just this call so the next call sees the real ceiling.
         with monkeypatch.context() as m:
-            m.setattr(app, "MAX_IMAGE_BYTES", 10)
+            m.setattr(config, "MAX_IMAGE_BYTES", 10)
             r = api.add_photos_from_data(fid, [{"name": "toobig.png", "data": good_data}])
         assert r["ok"], r
         assert r["added"] == 0

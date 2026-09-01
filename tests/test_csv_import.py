@@ -13,13 +13,13 @@ prove the single-transaction, all-or-nothing rollback guarantee.
 import sqlite3
 
 import simple_firearm_logbook as app
+from sfl import csv_import
 
 
 def _api(tmp_path):
     conn = app.open_db(str(tmp_path / "test.db"))
     api = app.Api()
     api.set_conn(conn)
-    api.set_db_path(str(tmp_path / "test.db"))
     return api
 
 
@@ -295,7 +295,7 @@ def test_commit_honors_disposition_fields_via_api(tmp_path):
 def test_commit_is_a_single_transaction_all_or_nothing(tmp_path, monkeypatch):
     api = _api(tmp_path)
     try:
-        real_insert = app._insert_imported_firearm
+        real_insert = csv_import._insert_imported_firearm
         calls = {"n": 0}
 
         def flaky_insert(cur, record):
@@ -304,7 +304,7 @@ def test_commit_is_a_single_transaction_all_or_nothing(tmp_path, monkeypatch):
                 raise sqlite3.OperationalError("simulated failure")
             return real_insert(cur, record)
 
-        monkeypatch.setattr(app, "_insert_imported_firearm", flaky_insert)
+        monkeypatch.setattr(csv_import, "_insert_imported_firearm", flaky_insert)
         r = api.import_csv_commit([
             _record(make="Glock", model="19"),
             _record(make="Sig", model="P320"),

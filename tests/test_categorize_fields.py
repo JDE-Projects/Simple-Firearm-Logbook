@@ -17,7 +17,6 @@ def _api(tmp_path):
     conn = app.open_db(str(tmp_path / "test.db"))
     api = app.Api()
     api.set_conn(conn)
-    api.set_db_path(str(tmp_path / "test.db"))
     return api
 
 

@@ -20,6 +20,8 @@ import warnings
 import simple_firearm_logbook as app
 from PIL import Image
 
+from sfl import config
+
 
 def test_max_image_pixels_set_so_the_real_ceiling_lands_at_64_megapixels():
     assert Image.MAX_IMAGE_PIXELS == 32_000_000
@@ -63,12 +65,12 @@ def test_photo_source_too_large_allows_a_file_at_or_under_the_limit(monkeypatch)
 def test_photo_b64_too_large_flags_an_encoded_payload_over_the_limit(monkeypatch):
     # Byte counts chosen as multiples of 3 so base64 needs no padding and
     # the (len * 3) // 4 estimate lines up exactly with the real size.
-    monkeypatch.setattr(app, "MAX_IMAGE_BYTES", 9)
+    monkeypatch.setattr(config, "MAX_IMAGE_BYTES", 9)
     raw = base64.b64encode(b"x" * 12).decode("ascii")
     assert app._photo_b64_too_large(raw) is True
 
 
 def test_photo_b64_too_large_allows_an_encoded_payload_at_or_under_the_limit(monkeypatch):
-    monkeypatch.setattr(app, "MAX_IMAGE_BYTES", 9)
+    monkeypatch.setattr(config, "MAX_IMAGE_BYTES", 9)
     raw = base64.b64encode(b"x" * 9).decode("ascii")
     assert app._photo_b64_too_large(raw) is False

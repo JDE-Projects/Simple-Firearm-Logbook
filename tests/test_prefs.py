@@ -3,11 +3,12 @@
 import json
 
 import simple_firearm_logbook as app
+from sfl import paths
 
 
 def _use_pref_path(monkeypatch, tmp_path):
     pref_path = tmp_path / "simple_firearm_logbook.pref"
-    monkeypatch.setattr(app, "_pref_path", lambda: str(pref_path))
+    monkeypatch.setattr(paths, "_pref_path", lambda: str(pref_path))
     return pref_path
 
 
@@ -47,7 +48,7 @@ def test_save_prefs_writes_json_and_reports_success(monkeypatch, tmp_path):
 
 
 def test_save_prefs_reports_failure_when_target_cannot_be_opened(monkeypatch, tmp_path):
-    monkeypatch.setattr(app, "_pref_path", lambda: str(tmp_path))
+    monkeypatch.setattr(paths, "_pref_path", lambda: str(tmp_path))
 
     assert app.save_prefs({"theme": "light"}) is False
 

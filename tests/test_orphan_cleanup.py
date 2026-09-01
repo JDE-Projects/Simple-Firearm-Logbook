@@ -20,16 +20,16 @@ import sqlite3
 from PIL import Image
 
 import simple_firearm_logbook as app
+from sfl import paths
 
 
 def _api(tmp_path, monkeypatch):
     # Route photos\/attachments\ into tmp_path instead of the real app
     # folder (app_dir() defaults to this repo's own directory when unfrozen).
-    monkeypatch.setattr(app, "app_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(paths, "app_dir", lambda: str(tmp_path))
     conn = app.open_db(str(tmp_path / "test.db"))
     api = app.Api()
     api.set_conn(conn)
-    api.set_db_path(str(tmp_path / "test.db"))
     return api
 
 
