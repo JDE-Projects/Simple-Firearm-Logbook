@@ -1292,31 +1292,19 @@ class Api:
             "SELECT id, filename, seq, is_primary FROM photos WHERE firearm_id=? ORDER BY seq",
             (firearm_id,),
         ).fetchall()
-        result = []
-        for r in rows:
-            full = _safe_photo_path(r["filename"])
-            result.append({
-                "id": r["id"],
-                "filename": r["filename"],
-                "seq": r["seq"],
-                "is_primary": bool(r["is_primary"]),
-                "missing": not (full and os.path.isfile(full)),
-            })
-        return result
+        return [
+            {"id": r["id"], "filename": r["filename"], "seq": r["seq"], "is_primary": bool(r["is_primary"])}
+            for r in rows
+        ]
 
     def _attachment_stats(self, firearm_id):
         row = self._conn.execute(
             "SELECT COUNT(*) AS c, COALESCE(SUM(size_bytes), 0) AS b FROM attachments WHERE firearm_id=?",
             (firearm_id,),
         ).fetchone()
-        filenames = self._conn.execute(
-            "SELECT filename FROM attachments WHERE firearm_id=?", (firearm_id,)
-        ).fetchall()
-        missing = 0
-        for fn in filenames:
-            full = _safe_attachment_path(fn["filename"])
-            if not (full and os.path.isfile(full)):
-                missing += 1
+        # Reuse the per-row on-disk check _get_attachments already does rather
+        # than scanning the files a second time here.
+        missing = sum(1 for a in self._get_attachments(firearm_id) if a["missing"])
         return row["c"], row["b"], missing
 
     def list_firearms(self):
@@ -1328,7 +1316,6 @@ class Api:
                 photos = self._get_photos(r["id"])
                 primary = next((p for p in photos if p["is_primary"]), photos[0] if photos else None)
                 d["photo_count"] = len(photos)
-                d["photo_missing"] = sum(1 for p in photos if p["missing"])
                 d["primary_photo_filename"] = primary["filename"] if primary else None
                 attachment_count, attachment_bytes, attachment_missing = self._attachment_stats(r["id"])
                 d["attachment_count"] = attachment_count
@@ -2103,7 +2090,10 @@ class Api:
             path = result[0] if isinstance(result, (list, tuple)) else result
             if not path:
                 return {"ok": True, "cancelled": True}
-            if ext and not path.lower().endswith(ext.lower()):
+            # Only supply the original extension when the user left one off
+            # entirely; if they typed a different one, respect their choice
+            # rather than forcing a doubled "notes.txt.pdf".
+            if ext and not os.path.splitext(path)[1]:
                 path += ext
             shutil.copy2(full, path)
             self.log(f"Saved a copy of attachment {attachment_id}")

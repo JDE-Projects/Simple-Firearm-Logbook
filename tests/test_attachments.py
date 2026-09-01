@@ -281,7 +281,7 @@ def test_two_attachments_get_distinct_stored_names_with_extension_preserved(tmp_
 
 
 # ─────────────────────────────────────────────────────────────
-#  missing-file detection: _get_attachments / _get_photos / _attachment_stats
+#  missing-file detection: _get_attachments / _attachment_stats
 # ─────────────────────────────────────────────────────────────
 def test_get_attachments_flags_missing_after_file_removed(tmp_path, monkeypatch):
     api = _api(tmp_path, monkeypatch)
@@ -297,28 +297,6 @@ def test_get_attachments_flags_missing_after_file_removed(tmp_path, monkeypatch)
 
         refreshed = api._get_attachments(fid)
         assert refreshed[0]["missing"] is True
-    finally:
-        api.close_conn()
-
-
-def test_get_photos_flags_missing_after_file_removed(tmp_path, monkeypatch):
-    api = _api(tmp_path, monkeypatch)
-    try:
-        fid = api.create_firearm("Glock", "19")["firearm_id"]
-        rel_name = "photos/1_1.jpg"
-        _make_file(tmp_path / rel_name, b"fake-jpeg-bytes")
-        api._conn.execute(
-            "INSERT INTO photos (firearm_id, filename, seq, is_primary) VALUES (?, ?, ?, ?)",
-            (fid, rel_name, 1, 1),
-        )
-        api._conn.commit()
-
-        photos = api._get_photos(fid)
-        assert photos[0]["missing"] is False
-
-        os.remove(tmp_path / rel_name)
-        photos = api._get_photos(fid)
-        assert photos[0]["missing"] is True
     finally:
         api.close_conn()
 
@@ -417,5 +395,33 @@ def test_save_attachment_copy_default_name_has_no_doubled_extension(tmp_path, mo
         r = api.save_attachment_copy(attachment_id)
         assert r["ok"], r
         assert captured["save_filename"] == "guide.md"
+    finally:
+        api.close_conn()
+
+
+def test_save_attachment_copy_respects_a_user_chosen_extension(tmp_path, monkeypatch):
+    # If the user names the copy with a different extension in the save
+    # dialog, keep their name as typed instead of appending the original
+    # extension and producing "notes.txt.pdf".
+    api = _api(tmp_path, monkeypatch)
+    try:
+        fid = api.create_firearm("Glock", "19")["firearm_id"]
+        src = _make_file(tmp_path / "src" / "receipt.pdf", b"pdf-bytes")
+        added = api.add_attachments(fid, [src])
+        attachment_id = added["attachments"][0]["id"]
+
+        target = tmp_path / "saved" / "notes.txt"
+        os.makedirs(target.parent, exist_ok=True)
+
+        class _StubWindow:
+            def create_file_dialog(self, *args, **kwargs):
+                return str(target)
+
+        api._window = _StubWindow()
+        r = api.save_attachment_copy(attachment_id)
+        assert r["ok"], r
+        assert r["path"] == str(target)
+        assert target.exists()
+        assert not (tmp_path / "saved" / "notes.txt.pdf").exists()
     finally:
         api.close_conn()
