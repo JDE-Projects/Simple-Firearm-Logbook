@@ -5,6 +5,7 @@ arguments. Methods return JSON-able dicts; the UI awaits."""
 import sqlite3
 
 from sfl.services import attachments as attachments_service
+from sfl.services import backup as backup_service
 from sfl.services import export as export_service
 from sfl.services import firearms as firearms_service
 from sfl.services import imports as imports_service
@@ -204,6 +205,13 @@ class Api:
         'primary', 'all', or 'none'. Documents have no depth selector and are
         always fully included; they're the point of the backup."""
         return export_service.export_full(self._conn, self._window, self.log, photo_depth)
+
+    # --- backup ---------------------------------------------------------------
+    def create_backup(self):
+        """Complete, restorable archive: a safe SQLite copy of the database
+        plus every photo and document file it references, with a manifest.
+        Separate from the exports above, which are share/print output."""
+        return backup_service.create_backup(self._conn, self._window, self.log)
 
     # --- CSV import -----------------------------------------------------------
     def import_csv_pick(self):

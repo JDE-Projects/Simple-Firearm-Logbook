@@ -404,6 +404,7 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
         </label>
       </div>
       <div class="toolbar-right">
+        <button type="button" class="btn" onclick="runBackup()">Backup</button>
         <button type="button" class="btn" onclick="openImportModal()">Import</button>
         <button type="button" class="btn" onclick="openExportFullModal()">Export all</button>
         <button type="button" class="btn primary" onclick="openAddFirearmModal()">Add firearm</button>
@@ -804,6 +805,17 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
         <button class="btn" id="exportFullCancelBtn" onclick="closeExportFullModal()">Cancel</button>
         <button class="btn primary" id="exportFullGoBtn" onclick="runExportFull()">Export</button>
         <button class="btn primary" id="exportFullOkBtn" style="display:none;" onclick="closeExportFullModal()">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- backup result modal -->
+  <div class="modal-scrim" id="backupResultModalScrim">
+    <div class="modal">
+      <h3 id="backupResultTitle">Backup complete</h3>
+      <div class="m-msg" id="backupResultMsg"></div>
+      <div class="m-foot">
+        <button class="btn primary" onclick="closeBackupResultModal()">OK</button>
       </div>
     </div>
   </div>
@@ -1715,6 +1727,39 @@ async function confirmDeleteFirearm(){
   if (r.warning) showToast(r.warning);
   closeDeleteFirearmModal();
   showListView();
+}
+
+/* ---------- backup ---------- */
+function closeBackupResultModal(){
+  $("backupResultModalScrim").classList.remove("open");
+}
+function showBackupResultModal(title, html){
+  $("backupResultTitle").textContent = title;
+  $("backupResultMsg").innerHTML = html;
+  $("backupResultModalScrim").classList.add("open");
+}
+async function runBackup(){
+  if (!api()) return;
+  const r = await api().create_backup();
+  if (!r) return;
+  if (r.cancelled) return;
+  if (!r.ok){
+    showBackupResultModal("Backup failed", esc(r.error || "Couldn't create the backup."));
+    return;
+  }
+  const c = r.counts || {};
+  const summary = `Includes ${c.firearms||0} firearm(s), ${c.photos||0} photo(s), and ${c.attachments||0} document(s).`;
+  if (r.missing && r.missing.length){
+    const list = r.missing.map(esc).join("<br>");
+    showBackupResultModal(
+      "Backup partly complete",
+      `Saved to <b>${esc(r.path)}</b>.<br>${summary}` +
+      `<span class="m-detail">${r.missing.length} file(s) could not be found on disk and were left out ` +
+      `of the archive. They are listed in the backup's manifest:<br>${list}</span>`
+    );
+    return;
+  }
+  showBackupResultModal("Backup complete", `Saved to <b>${esc(r.path)}</b>.<br>${summary}`);
 }
 
 /* ---------- exports ---------- */
