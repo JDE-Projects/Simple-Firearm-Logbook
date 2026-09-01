@@ -2,10 +2,16 @@
 sizes, and validation/normalization of the optional date and money fields
 used throughout the add/edit forms and CSV import."""
 import datetime
+import hashlib
 import re
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 _USERS_PATH_RE = re.compile(r"([\\/][Uu]sers[\\/])([^\\/]+)([\\/])")
+
+
+def sha256_hex(data: bytes) -> str:
+    """Sha256 hex digest of a bytes object already held in memory."""
+    return hashlib.sha256(data).hexdigest()
 
 
 def _redact_username(text: str) -> str:

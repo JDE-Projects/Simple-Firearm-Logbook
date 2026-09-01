@@ -4,7 +4,6 @@ which produces share/print output, not a restorable copy. create_backup runs
 the native Save dialog; _write_backup_zip does the actual work and has no
 window dependency, so it can be tested directly."""
 import datetime
-import hashlib
 import json
 import os
 import sqlite3
@@ -14,6 +13,7 @@ import zipfile
 import webview
 
 from sfl import config, paths
+from sfl.utils import sha256_hex
 
 
 def create_backup(conn, window, log):
@@ -70,7 +70,7 @@ def _write_backup_zip(conn, dest_path, log):
         missing = []
 
         db_arcname = config.DB_FILENAME
-        db_sha256 = hashlib.sha256(db_bytes).hexdigest()
+        db_sha256 = sha256_hex(db_bytes)
         inventory.append({"path": db_arcname, "size": len(db_bytes), "sha256": db_sha256})
 
         files_to_include = []
@@ -93,7 +93,7 @@ def _write_backup_zip(conn, dest_path, log):
                 inventory.append({
                     "path": arcname,
                     "size": len(file_bytes),
-                    "sha256": hashlib.sha256(file_bytes).hexdigest(),
+                    "sha256": sha256_hex(file_bytes),
                 })
 
             counts = {

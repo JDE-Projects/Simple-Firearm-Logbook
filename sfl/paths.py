@@ -34,31 +34,31 @@ def _sanitize_attachment_label(raw: str) -> str:
     return sanitize_filename(raw or "")[:ATTACHMENT_LABEL_MAX]
 
 
-def _safe_photo_path(filename: str):
-    """Resolve a photo's stored relative filename to a full path, refusing
-    anything that would resolve outside the app folder (path traversal)."""
+def _safe_resolve_path(base_dir: str, relative: str):
+    """Resolve relative under base_dir to a full real path, refusing anything
+    that would resolve outside base_dir (path traversal). Returns None on any
+    failure or escape."""
     try:
-        base = os.path.realpath(app_dir())
-        full = os.path.realpath(os.path.join(app_dir(), filename))
+        base = os.path.realpath(base_dir)
+        full = os.path.realpath(os.path.join(base_dir, relative))
         if full != base and not full.startswith(base + os.sep):
             return None
         return full
     except Exception:
         return None
+
+
+def _safe_photo_path(filename: str):
+    """Resolve a photo's stored relative filename to a full path, refusing
+    anything that would resolve outside the app folder (path traversal)."""
+    return _safe_resolve_path(app_dir(), filename)
 
 
 def _safe_attachment_path(filename: str):
     """Resolve a document's stored relative filename to a full path, refusing
     anything that would resolve outside the app folder (path traversal).
     Mirrors _safe_photo_path."""
-    try:
-        base = os.path.realpath(app_dir())
-        full = os.path.realpath(os.path.join(app_dir(), filename))
-        if full != base and not full.startswith(base + os.sep):
-            return None
-        return full
-    except Exception:
-        return None
+    return _safe_resolve_path(app_dir(), filename)
 
 
 def _pref_path() -> str:
