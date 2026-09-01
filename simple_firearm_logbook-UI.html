@@ -173,6 +173,9 @@ table.fw-table tbody tr.disposed-row:hover { opacity:.85; }
   padding:2px 7px; border-radius:999px; color:var(--text-dim); background:var(--panel-2);
   border:1px solid var(--border-2); white-space:nowrap;
 }
+.doc-badge.is-missing {
+  color:var(--red); border-color:var(--red); background:color-mix(in srgb, var(--red) 14%, transparent);
+}
 .empty-hint { padding:40px 24px; text-align:center; color:var(--text-faint); font-size:13.5px; }
 
 /* ---- detail view ---- */
@@ -234,6 +237,12 @@ table.fw-table tbody tr.disposed-row:hover { opacity:.85; }
 .doc-label { font-size:13px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .doc-size { font-size:11.5px; color:var(--text-faint); flex:0 0 auto; }
 .doc-actions { display:flex; gap:6px; flex:0 0 auto; }
+.document-row.is-missing { border-color:var(--red); }
+.doc-missing-tag {
+  font-size:10px; font-weight:600; letter-spacing:.3px; color:var(--red);
+  background:color-mix(in srgb, var(--red) 16%, transparent); padding:2px 6px; border-radius:999px;
+  flex:0 0 auto;
+}
 
 /* ---- lightbox ---- */
 .lightbox-scrim { position:fixed; inset:0; background:rgba(0,0,0,.8); z-index:95; display:none; align-items:center; justify-content:center; }
@@ -749,9 +758,10 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
   <div class="modal-scrim" id="deleteAttachmentModalScrim">
     <div class="modal">
       <h3>Delete this document?</h3>
-      <div class="m-msg">This can't be undone.</div>
+      <div class="m-msg" id="deleteAttachmentMsg">This removes the app's only copy of the file and can't be undone.</div>
       <div class="m-foot">
         <button class="btn" onclick="closeDeleteAttachmentModal()">Cancel</button>
+        <button class="btn" id="deleteAttachmentSaveCopyBtn" onclick="saveAttachmentCopyBeforeDelete()">Save a copy first</button>
         <button class="btn danger" onclick="confirmDeleteAttachment()">Delete</button>
       </div>
     </div>
@@ -1029,8 +1039,9 @@ function renderTable(){
     let badge = disposed ? `<span class="status-badge ${statusClass(f.disposition_status)}">${esc(f.disposition_status)}</span>` : "";
     if (f.held_in_trust) badge += ` <span class="status-badge badge-trust">Trust</span>`;
     if (f.is_nfa) badge += ` <span class="status-badge badge-nfa">NFA</span>`;
+    const docMissingText = f.attachment_missing > 0 ? ` (${f.attachment_missing} missing)` : "";
     const docBadge = f.attachment_count
-      ? `<span class="doc-badge" title="${esc(formatSize(f.attachment_bytes))}">${f.attachment_count} doc${f.attachment_count === 1 ? "" : "s"}</span>`
+      ? `<span class="doc-badge${f.attachment_missing > 0 ? " is-missing" : ""}" title="${esc(formatSize(f.attachment_bytes))}${f.attachment_missing > 0 ? `, ${f.attachment_missing} missing` : ""}">${f.attachment_count} doc${f.attachment_count === 1 ? "" : "s"}${docMissingText}</span>`
       : "";
     return `<tr class="${disposed ? "disposed-row" : ""}" onclick="openDetail(${f.id})">
       <td class="col-lognum">${esc(f.log_number)}</td>
@@ -1479,7 +1490,10 @@ function renderDocuments(){
   const rows = $("documentRows");
   const hint = $("documentEmptyHint");
   const total = currentAttachments.reduce((sum, a) => sum + (a.size_bytes || 0), 0);
-  $("docPanelTotal").textContent = currentAttachments.length ? `(${formatSize(total)})` : "";
+  const missingCount = currentAttachments.reduce((sum, a) => sum + (a.missing ? 1 : 0), 0);
+  $("docPanelTotal").textContent = currentAttachments.length
+    ? (missingCount ? `(${formatSize(total)}, ${missingCount} missing)` : `(${formatSize(total)})`)
+    : "";
   if (!currentAttachments.length){
     rows.innerHTML = "";
     hint.style.display = "block";
@@ -1487,10 +1501,11 @@ function renderDocuments(){
   }
   hint.style.display = "none";
   rows.innerHTML = currentAttachments.map(a => `
-    <div class="document-row">
+    <div class="document-row${a.missing ? " is-missing" : ""}">
       <div class="doc-info">
         <span class="doc-label" title="${esc(a.label)}">${esc(a.label)}</span>
         <span class="doc-size">${formatSize(a.size_bytes)}</span>
+        ${a.missing ? `<span class="doc-missing-tag">Missing</span>` : ""}
       </div>
       <div class="doc-actions">
         <button type="button" class="btn small" onclick="openAttachment(${a.id})">Open</button>
@@ -1510,7 +1525,8 @@ async function loadAttachmentsTotal(){
     el.textContent = "";
     return;
   }
-  el.textContent = `Attachments: ${formatSize(r.total_bytes)} in ${r.count} file${r.count === 1 ? "" : "s"}`;
+  el.textContent = `Attachments: ${formatSize(r.total_bytes)} in ${r.count} file${r.count === 1 ? "" : "s"}`
+    + (r.missing > 0 ? `, ${r.missing} missing` : "");
 }
 
 async function addAttachments(){
@@ -1602,11 +1618,39 @@ async function saveRenameAttachment(){
 
 function openDeleteAttachmentModal(attachmentId){
   pendingDeleteAttachmentId = attachmentId;
+  const a = currentAttachments.find(x => x.id === attachmentId);
+  const msgEl = $("deleteAttachmentMsg");
+  const copyBtn = $("deleteAttachmentSaveCopyBtn");
+  if (a && a.missing){
+    msgEl.textContent = "This file is already missing from the app's attachments folder. Delete only removes it from the list.";
+    copyBtn.style.display = "none";
+  } else {
+    msgEl.textContent = "This removes the app's only copy of the file and can't be undone.";
+    copyBtn.style.display = "";
+  }
   $("deleteAttachmentModalScrim").classList.add("open");
 }
 function closeDeleteAttachmentModal(){
   pendingDeleteAttachmentId = null;
   $("deleteAttachmentModalScrim").classList.remove("open");
+}
+async function saveAttachmentCopyBeforeDelete(){
+  if (!api() || !pendingDeleteAttachmentId) return;
+  const r = await api().save_attachment_copy(pendingDeleteAttachmentId);
+  if (!r){
+    showToast("Couldn't save a copy.");
+    return;
+  }
+  if (r.cancelled) return;
+  if (r.missing){
+    showToast(r.error || "That file is missing.");
+    return;
+  }
+  if (!r.ok){
+    showToast(r.error || "Couldn't save a copy.");
+    return;
+  }
+  showToast(r.path ? `Saved a copy to ${r.path}` : "Saved a copy.");
 }
 async function confirmDeleteAttachment(){
   if (!api() || !pendingDeleteAttachmentId) { closeDeleteAttachmentModal(); return; }

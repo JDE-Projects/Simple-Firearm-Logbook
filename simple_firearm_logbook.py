@@ -1292,17 +1292,32 @@ class Api:
             "SELECT id, filename, seq, is_primary FROM photos WHERE firearm_id=? ORDER BY seq",
             (firearm_id,),
         ).fetchall()
-        return [
-            {"id": r["id"], "filename": r["filename"], "seq": r["seq"], "is_primary": bool(r["is_primary"])}
-            for r in rows
-        ]
+        result = []
+        for r in rows:
+            full = _safe_photo_path(r["filename"])
+            result.append({
+                "id": r["id"],
+                "filename": r["filename"],
+                "seq": r["seq"],
+                "is_primary": bool(r["is_primary"]),
+                "missing": not (full and os.path.isfile(full)),
+            })
+        return result
 
     def _attachment_stats(self, firearm_id):
         row = self._conn.execute(
             "SELECT COUNT(*) AS c, COALESCE(SUM(size_bytes), 0) AS b FROM attachments WHERE firearm_id=?",
             (firearm_id,),
         ).fetchone()
-        return row["c"], row["b"]
+        filenames = self._conn.execute(
+            "SELECT filename FROM attachments WHERE firearm_id=?", (firearm_id,)
+        ).fetchall()
+        missing = 0
+        for fn in filenames:
+            full = _safe_attachment_path(fn["filename"])
+            if not (full and os.path.isfile(full)):
+                missing += 1
+        return row["c"], row["b"], missing
 
     def list_firearms(self):
         try:
@@ -1313,10 +1328,12 @@ class Api:
                 photos = self._get_photos(r["id"])
                 primary = next((p for p in photos if p["is_primary"]), photos[0] if photos else None)
                 d["photo_count"] = len(photos)
+                d["photo_missing"] = sum(1 for p in photos if p["missing"])
                 d["primary_photo_filename"] = primary["filename"] if primary else None
-                attachment_count, attachment_bytes = self._attachment_stats(r["id"])
+                attachment_count, attachment_bytes, attachment_missing = self._attachment_stats(r["id"])
                 d["attachment_count"] = attachment_count
                 d["attachment_bytes"] = attachment_bytes
+                d["attachment_missing"] = attachment_missing
                 firearms.append(d)
             return {"ok": True, "firearms": firearms}
         except Exception as e:
@@ -1872,16 +1889,18 @@ class Api:
             "SELECT id, filename, label, seq, size_bytes FROM attachments WHERE firearm_id=? ORDER BY seq",
             (firearm_id,),
         ).fetchall()
-        return [
-            {
+        result = []
+        for r in rows:
+            full = _safe_attachment_path(r["filename"])
+            result.append({
                 "id": r["id"],
                 "filename": r["filename"],
                 "label": r["label"],
                 "seq": r["seq"],
                 "size_bytes": r["size_bytes"],
-            }
-            for r in rows
-        ]
+                "missing": not (full and os.path.isfile(full)),
+            })
+        return result
 
     def choose_attachments(self):
         """Step one of the two-step add flow: opens a native multi-select file
@@ -2056,14 +2075,58 @@ class Api:
             self.log(f"delete_attachment failed: {e}")
             return {"ok": False, "error": "Couldn't delete the document."}
 
+    def save_attachment_copy(self, attachment_id):
+        """Copies a document's original file out to a location the user
+        picks, for use from the delete-document confirmation ('save a copy
+        first') so a deletion is never the only chance to keep the file."""
+        try:
+            row = self._conn.execute("SELECT * FROM attachments WHERE id=?", (attachment_id,)).fetchone()
+            if row is None:
+                return {"ok": False, "error": "That document no longer exists."}
+            full = _safe_attachment_path(row["filename"])
+            if full is None or not os.path.isfile(full):
+                return {
+                    "ok": False,
+                    "missing": True,
+                    "error": f'"{row["label"]}" is missing from the app\'s attachments folder.',
+                }
+            ext = os.path.splitext(row["filename"])[1]
+            # The label usually already carries the original extension (it's
+            # built from the source filename), so only add the extension when
+            # it's actually absent, to avoid a doubled "name.md.md".
+            default_name = sanitize_filename(row["label"])
+            if ext and not default_name.lower().endswith(ext.lower()):
+                default_name += ext
+            result = self._window.create_file_dialog(webview.FileDialog.SAVE, save_filename=default_name)
+            if not result:
+                return {"ok": True, "cancelled": True}
+            path = result[0] if isinstance(result, (list, tuple)) else result
+            if not path:
+                return {"ok": True, "cancelled": True}
+            if ext and not path.lower().endswith(ext.lower()):
+                path += ext
+            shutil.copy2(full, path)
+            self.log(f"Saved a copy of attachment {attachment_id}")
+            return {"ok": True, "path": path}
+        except Exception as e:
+            self.log(f"save_attachment_copy failed: {e}")
+            return {"ok": False, "error": "Couldn't save a copy."}
+
     def get_attachment_totals(self):
         """Global disk-use total across every firearm's documents, summed
-        from the stored size_bytes column (no filesystem scan)."""
+        from the stored size_bytes column, plus a count of documents whose
+        file is missing from disk (a light per-file existence check)."""
         try:
             row = self._conn.execute(
                 "SELECT COUNT(*) AS c, COALESCE(SUM(size_bytes), 0) AS b FROM attachments"
             ).fetchone()
-            return {"ok": True, "total_bytes": row["b"], "count": row["c"]}
+            filenames = self._conn.execute("SELECT filename FROM attachments").fetchall()
+            missing = 0
+            for fn in filenames:
+                full = _safe_attachment_path(fn["filename"])
+                if not (full and os.path.isfile(full)):
+                    missing += 1
+            return {"ok": True, "total_bytes": row["b"], "count": row["c"], "missing": missing}
         except Exception as e:
             self.log(f"get_attachment_totals failed: {e}")
             return {"ok": False, "error": "Couldn't load the document totals."}
