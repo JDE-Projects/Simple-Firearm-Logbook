@@ -299,6 +299,52 @@ def test_restore_commit_round_trip_replaces_logbook(tmp_path, monkeypatch):
     assert not staging.exists()
 
 
+def test_tampered_photo_is_truly_skipped_not_restored(tmp_path, monkeypatch):
+    # A photo whose bytes no longer match its manifest hash must not make it
+    # into the restored logbook, even though the surrounding photos/ folder
+    # is moved into place wholesale.
+    source_dir = tmp_path / "source"
+    dest_zip = tmp_path / "backup.zip"
+    source_dir.mkdir()
+    good_photo, _ = _build_backup(tmp_path, monkeypatch, source_dir, dest_zip)
+
+    import hashlib
+
+    def add_second_photo(entries):
+        bad_photo = f"{config.PHOTOS_DIRNAME}/00001_2.jpg"
+        entries[bad_photo] = b"original-bytes"
+        manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+        manifest["inventory"].append({
+            "path": bad_photo,
+            "size": len(b"original-bytes"),
+            "sha256": hashlib.sha256(b"original-bytes").hexdigest(),
+        })
+        entries["manifest.json"] = json.dumps(manifest).encode("utf-8")
+
+    _rewrite_zip(dest_zip, add_second_photo)
+
+    def tamper_second_photo(entries):
+        entries[f"{config.PHOTOS_DIRNAME}/00001_2.jpg"] = b"tampered-bytes"
+
+    _rewrite_zip(dest_zip, tamper_second_photo)
+
+    live_dir = tmp_path / "live_a"
+    live_dir.mkdir()
+    monkeypatch.setattr(paths, "app_dir", lambda: str(live_dir))
+
+    staging = tmp_path / "staging"
+    _, log = _log_collector()
+    preview = inspect_backup(str(dest_zip), str(staging), log)
+    assert preview["ok"] and not preview["blocked"], preview
+    assert preview["integrity_warnings"], preview
+
+    result = restore_commit(str(staging), log)
+    assert result["ok"], result
+
+    assert (live_dir / good_photo).exists()
+    assert not (live_dir / config.PHOTOS_DIRNAME / "00001_2.jpg").exists()
+
+
 def test_restore_commit_rolls_back_on_failure(tmp_path, monkeypatch):
     live_dir = tmp_path / "live_a"
     live_dir.mkdir()

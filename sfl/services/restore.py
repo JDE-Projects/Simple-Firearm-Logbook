@@ -6,7 +6,6 @@ to inspect_backup for the actual unpack and validation (no window
 dependency, so tests call it directly), and restore_commit does the actual
 file swap, moving the current logbook aside rather than deleting it so a
 mid-way failure can always be rolled back."""
-import hashlib
 import json
 import os
 import shutil
@@ -17,6 +16,7 @@ import zipfile
 import webview
 
 from sfl import config, paths
+from sfl.utils import sha256_hex
 
 
 def restore_pick(window, log):
@@ -54,10 +54,8 @@ def inspect_backup(zip_path, staging_dir, log):
     try:
         try:
             with zipfile.ZipFile(zip_path) as zf:
-                base = os.path.realpath(staging_dir)
                 for member in zf.infolist():
-                    target = os.path.realpath(os.path.join(staging_dir, member.filename))
-                    if target != base and not target.startswith(base + os.sep):
+                    if paths._safe_resolve_path(staging_dir, member.filename) is None:
                         return {"ok": False, "error": "That backup file looks corrupted or unsafe."}
                 zf.extractall(staging_dir)
         except zipfile.BadZipFile:
@@ -103,7 +101,7 @@ def inspect_backup(zip_path, staging_dir, log):
             entry_ok = os.path.isfile(full)
             if entry_ok:
                 with open(full, "rb") as fh:
-                    actual_hash = hashlib.sha256(fh.read()).hexdigest()
+                    actual_hash = sha256_hex(fh.read())
                 entry_ok = actual_hash == entry.get("sha256")
             if not entry_ok:
                 if is_db:
@@ -115,6 +113,17 @@ def inspect_backup(zip_path, staging_dir, log):
                     integrity_warnings.append(
                         f"{entry_path} is missing or has changed since the backup was made."
                     )
+                    # Flagged non-database files must be truly skipped, not
+                    # just warned about: if the staged copy exists but failed
+                    # its check (missing or hash mismatch), remove it here so
+                    # restore_commit's wholesale folder move can't bring a
+                    # tampered file into the live logbook. A file entirely
+                    # absent from the zip is already fine as-is.
+                    if os.path.isfile(full):
+                        try:
+                            os.remove(full)
+                        except Exception as e:
+                            log(f"inspect_backup: couldn't remove flagged staged file {entry_path}: {e}")
 
         # A backup with no database is unusable and must never restore: guard
         # the file's existence explicitly, because sqlite3.connect below would
@@ -131,18 +140,22 @@ def inspect_backup(zip_path, staging_dir, log):
         # confirm it actually opens as SQLite and isn't stamped with a schema
         # this build doesn't understand, same policy as db.open_db.
         if not blocked and integrity_ok:
-            try:
-                test_conn = sqlite3.connect(db_full)
+            if _sqlite_opens_cleanly(db_full, log, "inspect_backup"):
                 try:
-                    db_version = test_conn.execute("PRAGMA user_version").fetchone()[0]
-                    test_conn.execute("SELECT count(*) FROM sqlite_master")
-                finally:
-                    test_conn.close()
-                if db_version > config.SCHEMA_VERSION:
+                    test_conn = sqlite3.connect(db_full)
+                    try:
+                        db_version = test_conn.execute("PRAGMA user_version").fetchone()[0]
+                    finally:
+                        test_conn.close()
+                    if db_version > config.SCHEMA_VERSION:
+                        blocked = True
+                        block_reason = newer_msg
+                except sqlite3.DatabaseError as e:
+                    log(f"inspect_backup: staged database won't open: {e}")
+                    integrity_ok = False
                     blocked = True
-                    block_reason = newer_msg
-            except sqlite3.DatabaseError as e:
-                log(f"inspect_backup: staged database won't open: {e}")
+                    block_reason = "The backup's database file is missing or damaged. It can't be restored."
+            else:
                 integrity_ok = False
                 blocked = True
                 block_reason = "The backup's database file is missing or damaged. It can't be restored."
@@ -180,14 +193,7 @@ def restore_commit(staging_dir, log):
     not_changed = " Your logbook was not changed."
     if not os.path.isfile(staged_db):
         return {"ok": False, "error": "The staged backup is missing its database." + not_changed}
-    try:
-        test_conn = sqlite3.connect(staged_db)
-        try:
-            test_conn.execute("SELECT count(*) FROM sqlite_master")
-        finally:
-            test_conn.close()
-    except sqlite3.DatabaseError as e:
-        log(f"restore_commit: staged database won't open: {e}")
+    if not _sqlite_opens_cleanly(staged_db, log, "restore_commit"):
         return {"ok": False, "error": "The staged backup's database is damaged." + not_changed}
 
     base = paths.app_dir()
@@ -249,6 +255,23 @@ def restore_commit(staging_dir, log):
 
     log(f"Restore committed: {counts}")
     return {"ok": True, "counts": counts}
+
+
+def _sqlite_opens_cleanly(db_path, log, context):
+    """Connects to db_path, runs a harmless read-only query to confirm it's
+    actually an openable SQLite database, then closes. Returns True if it
+    opened cleanly, False if sqlite3.DatabaseError was raised (logged via
+    log, tagged with context so the caller's log line is identifiable)."""
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            conn.execute("SELECT count(*) FROM sqlite_master")
+        finally:
+            conn.close()
+        return True
+    except sqlite3.DatabaseError as e:
+        log(f"{context}: staged database won't open: {e}")
+        return False
 
 
 def _rollback(moved_aside, log):
