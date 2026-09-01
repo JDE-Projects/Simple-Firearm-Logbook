@@ -20,6 +20,7 @@ If you enjoyed this project and would like to buy me a coffee, check out my [Ko-
 - CSV import to bring in an existing collection, with a preview and per-row checks before anything is saved.
 - Single-firearm HTML export with embedded photos, ready to share or archive standalone.
 - Full-collection zip export: an HTML report, a CSV of every field, and the original photos.
+- Backup and restore: save a single zip holding your whole logbook (database, photos, and documents), then restore it later with a preview and a safe swap that keeps your current data until the restore succeeds.
 - Print-friendly export layout, independent of the app's own theme.
 - Fully offline: your collection data never leaves the machine.
 
@@ -76,6 +77,14 @@ pipeline from this repo. You can also check the file against the published
 4. Search or filter the list to find a firearm fast.
 5. When a firearm leaves your collection, record a disposition (sold, traded, lost, or stolen) instead of deleting it.
 6. Export a single firearm to HTML, or export the full collection to a zip with a report, CSV, and photos, for your own records.
+
+## Backup and restore
+The toolbar has **Backup** and **Restore** buttons for keeping a complete, restorable copy of your logbook.
+
+- **Backup** saves one `.zip` file (default name like `SFL_Backup_09012026_1430.zip`) holding a safe copy of your database, every photo, and every document, plus a small inventory list. Put it somewhere off the machine (a USB stick or another drive) so a lost or dead PC doesn't take your records with it. If a photo or document the logbook expects is missing from disk, the backup records that rather than failing quietly.
+- **Restore** reads a backup `.zip` back in. You first see a preview of what it contains (how many firearms, photos, and documents, plus any warnings) before anything changes. On confirming, your current logbook is moved aside, not deleted, and only removed once the restore succeeds, so a problem partway through leaves your existing data intact. The database has to be complete and readable for a restore to go ahead; a few missing photos or documents are only a warning, not a stop.
+
+Restore replaces your whole logbook with the backup's contents, so use it to move your collection to another machine or to recover, not to merge two logbooks.
 
 ## Security and privacy
 - Everything is stored locally next to the exe: the database, the photos folder, and the attachments folder.
