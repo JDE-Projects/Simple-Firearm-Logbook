@@ -65,7 +65,7 @@ pipeline from this repo. You can also check the file against the published
 ## Build from source (optional)
 - Python 3 on PATH.
 - `pip install -r requirements.txt` (pinned versions; includes PySide6 and pywebview)
-  Keep `simple_firearm_logbook.py`, the `sfl/resources/` folder, and the `.ico` together.
+  Keep `simple_firearm_logbook.py`, the `sfl/` folder, and the `.ico` together.
 - Run from source: `python simple_firearm_logbook.py`
 - Build the .exe: `Build_Simple_Firearm_Logbook.bat` -> `dist\Simple Firearm Logbook\`
 
