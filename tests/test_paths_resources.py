@@ -16,6 +16,15 @@ def test_resource_path_finds_html_icon_and_fonts_outside_working_directory(monke
     assert all(os.path.isfile(paths.resource_path(name)) for name in resource_names)
 
 
+def test_resource_path_uses_bundle_resources_folder_when_frozen(monkeypatch, tmp_path):
+    monkeypatch.setattr(paths.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(paths.sys, "_MEIPASS", str(tmp_path), raising=False)
+
+    assert paths.resource_path("simple_firearm_logbook-UI.html") == os.path.join(
+        str(tmp_path), "resources", "simple_firearm_logbook-UI.html"
+    )
+
+
 def test_app_dir_uses_entry_script_folder_when_unfrozen(monkeypatch, tmp_path):
     entry_script = tmp_path / "embedding_app.py"
     monkeypatch.setattr(paths.sys, "argv", [str(entry_script)])
