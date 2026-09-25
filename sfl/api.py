@@ -10,6 +10,7 @@ from sfl import config, db, paths
 from sfl.services import attachments as attachments_service
 from sfl.services import backup as backup_service
 from sfl.services import export as export_service
+from sfl.services import extension as extension_service
 from sfl.services import firearms as firearms_service
 from sfl.services import imports as imports_service
 from sfl.services import photos as photos_service
@@ -26,12 +27,34 @@ class Api:
         self._debug = False
         self._debug_path = None
         self._restore_staging = None
+        self._app_description = None
 
     def set_window(self, w):
         self._window = w
 
     def set_conn(self, conn: sqlite3.Connection):
         self._conn = conn
+
+    def set_app_description(self, description):
+        self._app_description = description
+
+    def get_app_info(self):
+        if self._app_description is None:
+            return {"ok": False, "error": "Application description has not been set."}
+        return {
+            "ok": True,
+            "product_name": self._app_description.product_name,
+            "update_link": self._app_description.update_link,
+        }
+
+    def get_extension(self):
+        if self._app_description is None:
+            return {"ok": True, "script": None, "stylesheet": None, "errors": []}
+        return extension_service.read_extension_files(
+            self._app_description.extension_script,
+            self._app_description.extension_stylesheet,
+            self.log,
+        )
 
     def close_conn(self):
         try:

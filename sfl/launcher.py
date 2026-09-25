@@ -26,6 +26,8 @@ class AppDescription:
     update_link: str
     api_class: type = Api
     open_database: Callable = open_db
+    extension_script: str | None = None
+    extension_stylesheet: str | None = None
 
 
 DEFAULT_APP_DESCRIPTION = AppDescription(
@@ -75,6 +77,7 @@ def run(description: AppDescription | None = None) -> None:
         sys.exit(1)
 
     api = description.api_class()
+    api.set_app_description(description)
     try:
         conn = description.open_database(os.path.join(folder, config.DB_FILENAME))
     except NewerSchemaError:

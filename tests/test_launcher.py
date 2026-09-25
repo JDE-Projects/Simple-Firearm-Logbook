@@ -21,6 +21,8 @@ def test_default_description_matches_current_app_values():
     )
     assert description.api_class is launcher.Api
     assert description.open_database is launcher.open_db
+    assert description.extension_script is None
+    assert description.extension_stylesheet is None
 
 
 def test_run_uses_custom_api_and_database_opener_and_sets_config(monkeypatch, tmp_path):
@@ -39,6 +41,9 @@ def test_run_uses_custom_api_and_database_opener_and_sets_config(monkeypatch, tm
         events = type("Events", (), {"shown": FakeEvent(), "closing": FakeEvent()})()
 
     class FakeApi:
+        def set_app_description(self, description):
+            calls["description"] = description
+
         def set_conn(self, conn):
             calls["conn"] = conn
 
@@ -84,6 +89,7 @@ def test_run_uses_custom_api_and_database_opener_and_sets_config(monkeypatch, tm
     assert calls["mutex"] == "Example_EmbeddingLogbook"
     assert calls["db_path"] == os.path.join(str(tmp_path), config.DB_FILENAME)
     assert calls["conn"] == "connection"
+    assert calls["description"] is description
     assert calls["window_args"][0][0] == "Embedding Logbook"
     assert calls["start"]["gui"] == "qt"
     assert calls["closed"] is True
