@@ -1034,6 +1034,9 @@ window.SFL = {
     }
     extensionHandlers[eventName].push(handler);
   },
+  reportError(message){
+    reportExtensionError(message);
+  },
 };
 let sortCol = "log_number";
 let sortDir = "asc";
