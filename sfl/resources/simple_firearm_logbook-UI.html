@@ -378,7 +378,7 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
     <div class="brand">
       <img class="app-glyph" src="simple_firearm_logbook.png" alt="">
       <div>
-        <div class="title">Simple Firearm Logbook</div>
+        <div class="title" id="appTitle">Simple Firearm Logbook</div>
         <div class="byline">by <a class="gh-link" onclick="openUrl('https://jde-projects.com')">JDE-Projects</a></div>
       </div>
     </div>
@@ -928,6 +928,17 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
     </div>
   </div>
 
+  <div class="modal-scrim" id="extErrModalScrim">
+    <div class="modal">
+      <h3>Extension problem</h3>
+      <div class="m-msg" id="ext-err-msg"></div>
+      <div class="m-foot">
+        <button class="btn" onclick="closeExtensionErrorModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="extension-root" style="display:none;"></div>
   <div class="toast" id="toast"></div>
 
   <div class="bottom-bar">
@@ -961,7 +972,11 @@ function showToast(msg){
   toastTimer = setTimeout(() => { el.style.display = "none"; }, 4500);
 }
 
-let STATE = { version:"1.0.0", theme:"dark" };
+let STATE = {
+  version:"1.0.0",
+  theme:"dark",
+  updateLink:"https://github.com/JDE-Projects/Simple-Firearm-Logbook/blob/main/README.md#updating",
+};
 let FIREARMS = [];
 let AUTOCOMPLETE = { makes:[], calibers:[], types:[] };
 const FIREARM_TYPES = ["Pistol","Revolver","Rifle","Shotgun","Receiver","Frame","Suppressor","Machinegun","SBR","SBS","AOW","Destructive Device"];
@@ -970,6 +985,56 @@ let currentSearch = "";
 let showDisposed = false;
 let showTrustOnly = false;
 let showNfaOnly = false;
+const extensionHandlers = {
+  started: [],
+  recordChanged: [],
+  viewChanged: [],
+};
+
+function reportExtensionError(message){
+  const text = String(message);
+  try {
+    const logged = api() && api().log(text);
+    if (logged && typeof logged.then === "function") logged.catch(() => {});
+  } catch (error) {
+    // Logging an extension error must not interrupt the app.
+  }
+  const area = $("ext-err-msg");
+  if (area.childNodes.length) area.appendChild(document.createElement("br"));
+  area.appendChild(document.createTextNode(text));
+  $("extErrModalScrim").classList.add("open");
+}
+
+function closeExtensionErrorModal(){
+  $("extErrModalScrim").classList.remove("open");
+}
+
+function extensionErrorMessage(error){
+  return "Extension handler failed: " + (error && error.message ? error.message : String(error));
+}
+
+function emitExtensionEvent(name, detail){
+  extensionHandlers[name].forEach(handler => {
+    try {
+      const result = handler(detail);
+      if (result && typeof result.then === "function") {
+        Promise.resolve(result).catch(error => reportExtensionError(extensionErrorMessage(error)));
+      }
+    } catch (error) {
+      reportExtensionError(extensionErrorMessage(error));
+    }
+  });
+}
+
+window.SFL = {
+  root: $("extension-root"),
+  on(eventName, handler){
+    if (!Object.prototype.hasOwnProperty.call(extensionHandlers, eventName)) {
+      throw new Error('Unknown extension event "' + eventName + '". Valid events: started, recordChanged, viewChanged.');
+    }
+    extensionHandlers[eventName].push(handler);
+  },
+};
 let sortCol = "log_number";
 let sortDir = "asc";
 let currentFirearm = null;
@@ -1154,13 +1219,14 @@ function onNfaFilterChange(){
   renderTable();
 }
 
-function showListView(){
+async function showListView(){
   $("detailWrap").style.display = "none";
   $("listWrap").style.display = "flex";
   currentFirearm = null;
   currentPhotos = [];
   currentAttachments = [];
-  loadFirearms();
+  await loadFirearms();
+  emitExtensionEvent("viewChanged", {view:"list"});
 }
 
 /* ---------- add / edit firearm modal ---------- */
@@ -1268,10 +1334,14 @@ async function saveFirearm(){
   }
   closeFirearmModal();
   if (editingFirearmId){
-    await openDetail(editingFirearmId);
+    if (await openDetail(editingFirearmId)) {
+      emitExtensionEvent("recordChanged", {id:editingFirearmId, action:"updated"});
+    }
   } else {
     await loadFirearms();
-    if (r.firearm_id) await openDetail(r.firearm_id);
+    if (r.firearm_id && await openDetail(r.firearm_id)) {
+      emitExtensionEvent("recordChanged", {id:r.firearm_id, action:"created"});
+    }
   }
 }
 
@@ -1285,11 +1355,11 @@ function fieldBlockPrice(label, value){
 }
 
 async function openDetail(id){
-  if (!api()) return;
+  if (!api()) return false;
   const r = await api().get_firearm(id);
   if (!r || !r.ok){
     showToast((r && r.error) || "Couldn't load that firearm.");
-    return;
+    return false;
   }
   currentFirearm = r.firearm;
   currentPhotos = r.photos;
@@ -1298,6 +1368,8 @@ async function openDetail(id){
   $("listWrap").style.display = "none";
   $("detailWrap").style.display = "flex";
   $("detailExportNote").style.display = "none";
+  emitExtensionEvent("viewChanged", {view:"detail", id:currentFirearm.id});
+  return true;
 }
 
 function renderDetail(){
@@ -1387,7 +1459,10 @@ async function saveDisposition(){
     return;
   }
   closeDispositionModal();
-  await openDetail(currentFirearm.id);
+  const firearmId = currentFirearm.id;
+  if (await openDetail(firearmId)) {
+    emitExtensionEvent("recordChanged", {id:firearmId, action:"disposition"});
+  }
 }
 
 /* ---------- photo gallery ---------- */
@@ -1757,7 +1832,10 @@ async function confirmMarkOwned(){
     showToast((r && r.error) || "Couldn't update the disposition.");
     return;
   }
-  await openDetail(currentFirearm.id);
+  const firearmId = currentFirearm.id;
+  if (await openDetail(firearmId)) {
+    emitExtensionEvent("recordChanged", {id:firearmId, action:"disposition"});
+  }
 }
 
 /* ---------- delete firearm ---------- */
@@ -1787,8 +1865,10 @@ async function confirmDeleteFirearm(){
     return;
   }
   if (r.warning) showToast(r.warning);
+  const firearmId = currentFirearm.id;
   closeDeleteFirearmModal();
-  showListView();
+  await showListView();
+  emitExtensionEvent("recordChanged", {id:firearmId, action:"deleted"});
 }
 
 /* ---------- backup ---------- */
@@ -2052,7 +2132,7 @@ async function runImportCommit(){
   if (!r) return;
   if (!r.ok){ errEl.textContent = r.error || "Couldn't import the file."; return; }
   IMPORT.imported = true;
-  loadFirearms();
+  await loadFirearms();
   $("importModalTitle").textContent = "Import complete";
   $("importModalMsg").textContent = "";
   const note = $("import-done-note");
@@ -2066,6 +2146,7 @@ async function runImportCommit(){
   $("importCommitBtn").style.display = "none";
   $("importOkBtn").style.display = "";
   showToast(`Imported ${r.imported} firearm(s).`);
+  emitExtensionEvent("recordChanged", {id:null, action:"imported"});
 }
 
 /* ---------- restore wizard ---------- */
@@ -2178,9 +2259,7 @@ async function doRestoreCommit(){
     return;
   }
   RESTORE.committed = true;
-  loadFirearms();
-  loadAutocomplete();
-  loadAttachmentsTotal();
+  await Promise.all([loadFirearms(), loadAutocomplete(), loadAttachmentsTotal()]);
   const c = r.counts || {};
   $("restoreModalTitle").textContent = "Restore complete";
   $("restoreModalMsg").textContent = "";
@@ -2193,6 +2272,7 @@ async function doRestoreCommit(){
   $("restoreProceedBtn").style.display = "none";
   $("restoreOkBtn").style.display = "";
   showToast("Restore complete.");
+  emitExtensionEvent("recordChanged", {id:null, action:"restored"});
 }
 
 /* ---------- misc bridge helpers ---------- */
@@ -2214,6 +2294,9 @@ function openUpdateErrorModal(reason){
 function closeUpdateErrorModal(){
   $("updateErrModalScrim").classList.remove("open");
 }
+function buildUpdateNotice(version){
+  return 'Update available: <a href="' + esc(STATE.updateLink) + '" target="_blank" rel="noopener">v' + esc(version) + '</a>';
+}
 $("updateBtn").onclick = async () => {
   const btn = $("updateBtn");
   const notice = $("updateNotice");
@@ -2224,7 +2307,7 @@ $("updateBtn").onclick = async () => {
   try {
     const r = await api().check_update();
     if (r && r.update) {
-      notice.innerHTML = 'Update available: <a href="https://github.com/JDE-Projects/Simple-Firearm-Logbook/blob/main/README.md#updating" target="_blank" rel="noopener">v' + esc(r.version) + '</a>';
+      notice.innerHTML = buildUpdateNotice(r.version);
     } else if (r && r.offline) {
       notice.textContent = "Couldn't reach GitHub to check for updates.";
       fadeNotice();
@@ -2253,12 +2336,57 @@ async function boot(){
   applyTheme(cfg.theme || "dark");
   $("verLabel").textContent = "v" + (STATE.version || "1.0.0");
 
+  try {
+    const appInfo = await api().get_app_info();
+    if (appInfo && appInfo.ok) {
+      document.title = appInfo.product_name;
+      $("appTitle").textContent = appInfo.product_name;
+      STATE.updateLink = appInfo.update_link;
+    }
+  } catch (error) {
+    // Keep the bundled product name and update link when app information is unavailable.
+  }
+
+  try {
+    const extension = await api().get_extension();
+    if (!extension || !extension.ok) {
+      reportExtensionError("Couldn't load extension: " + ((extension && extension.error) || "The extension service didn't return a result."));
+    } else {
+      (extension.errors || []).forEach(reportExtensionError);
+      if (typeof extension.stylesheet === "string" && extension.stylesheet) {
+        const style = document.createElement("style");
+        style.id = "extension-style";
+        style.textContent = extension.stylesheet;
+        document.head.appendChild(style);
+      }
+      if (typeof extension.script === "string" && extension.script) {
+        const script = document.createElement("script");
+        script.id = "extension-script";
+        const onExtensionError = event => {
+          reportExtensionError("Extension script failed: " + (event.message || "Unknown error."));
+        };
+        window.addEventListener("error", onExtensionError);
+        try {
+          script.textContent = extension.script;
+          document.head.appendChild(script);
+        } catch (error) {
+          reportExtensionError("Extension script failed: " + (error && error.message ? error.message : String(error)));
+        } finally {
+          window.removeEventListener("error", onExtensionError);
+        }
+      }
+    }
+  } catch (error) {
+    reportExtensionError("Couldn't load extension: " + (error && error.message ? error.message : String(error)));
+  }
+
   await Promise.all([loadFirearms(), loadAutocomplete(), loadAttachmentsTotal()]);
+  emitExtensionEvent("started", {});
 
   // quiet startup update check, silent on failure
   const r = await api().check_update();
   if (r && r.update){
-    $("updateNotice").innerHTML = 'Update available: <a href="https://github.com/JDE-Projects/Simple-Firearm-Logbook/blob/main/README.md#updating" target="_blank" rel="noopener">v' + esc(r.version) + '</a>';
+    $("updateNotice").innerHTML = buildUpdateNotice(r.version);
   }
 }
 window.addEventListener("pywebviewready", boot);
