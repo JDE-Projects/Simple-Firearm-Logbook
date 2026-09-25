@@ -26,7 +26,7 @@ If you enjoyed this project and would like to buy me a coffee, check out my [Ko-
 
 ## How it works
 - Backend: Python with SQLite (standard library). Data is stored in `simple_firearm_logbook.db` next to the exe, with photos copied into a `photos\` folder and documents into an `attachments\` folder alongside it.
-- Window: pywebview on the Qt backend, UI in simple_firearm_logbook-UI.html.
+- Window: pywebview on the Qt backend, UI in sfl/resources/simple_firearm_logbook-UI.html.
 
 ## Download and run
 Two ways to get it from the [Releases](../../releases) page, pick one:
@@ -65,8 +65,7 @@ pipeline from this repo. You can also check the file against the published
 ## Build from source (optional)
 - Python 3 on PATH.
 - `pip install -r requirements.txt` (pinned versions; includes PySide6 and pywebview)
-  Keep `simple_firearm_logbook.py`, `simple_firearm_logbook-UI.html`, the `fonts/`
-  folder, the `.ico` and `.png` together.
+  Keep `simple_firearm_logbook.py`, the `sfl/resources/` folder, and the `.ico` together.
 - Run from source: `python simple_firearm_logbook.py`
 - Build the .exe: `Build_Simple_Firearm_Logbook.bat` -> `dist\Simple Firearm Logbook\`
 

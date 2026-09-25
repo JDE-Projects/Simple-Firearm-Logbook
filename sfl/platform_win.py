@@ -139,27 +139,26 @@ def _writable_check(folder: str) -> bool:
         return False
 
 
-def _show_write_error(folder: str):
+def _show_write_error(folder: str, product_name: str = "Simple Firearm Logbook"):
     msg = (
-        "Simple Firearm Logbook keeps its data in a file next to the app, "
+        f"{product_name} keeps its data in a file next to the app, "
         f"but this folder isn't writable:\n\n{folder}\n\n"
         "This often happens when the app is placed in Program Files. Move it "
         "to a writable folder (like your Desktop or Documents) and try again."
     )
     try:
-        ctypes.windll.user32.MessageBoxW(0, msg, "Simple Firearm Logbook", 0x10)  # MB_ICONERROR
+        ctypes.windll.user32.MessageBoxW(0, msg, product_name, 0x10)  # MB_ICONERROR
     except Exception:
         pass
 
 
-def _show_newer_schema_error():
+def _show_newer_schema_error(product_name: str = "Simple Firearm Logbook"):
     msg = (
-        "This data file was created by a newer version of Simple Firearm "
-        "Logbook than this one.\n\n"
+        f"This data file was created by a newer version of {product_name} than this one.\n\n"
         "Update to the latest version of the app to open it."
     )
     try:
-        ctypes.windll.user32.MessageBoxW(0, msg, "Simple Firearm Logbook", 0x10)  # MB_ICONERROR
+        ctypes.windll.user32.MessageBoxW(0, msg, product_name, 0x10)  # MB_ICONERROR
     except Exception:
         pass
 

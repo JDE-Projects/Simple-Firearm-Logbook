@@ -10,16 +10,17 @@ _INVALID_FILENAME_CHARS = '<>:"/\\|?*'
 
 
 def resource_path(rel: str) -> str:
-    """Path to a bundled resource, working both from source and PyInstaller."""
-    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    return os.path.join(base, rel)
+    """Path to a package resource, working both from source and PyInstaller."""
+    if getattr(sys, "frozen", False):
+        return os.path.join(sys._MEIPASS, "resources", rel)
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", rel)
 
 
 def app_dir() -> str:
     """Folder the app lives in: next to the .exe when frozen, else the script."""
     if getattr(sys, "frozen", False):
         return os.path.dirname(sys.executable)
-    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.dirname(os.path.abspath(sys.argv[0]))
 
 
 def sanitize_filename(name: str) -> str:

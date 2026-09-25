@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sfl"
+dynamic = ["version"]
+description = "A local firearm inventory and record-keeping package."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "LicenseRef-PolyForm-Noncommercial-1.0.0"
+license-files = ["LICENSE"]
+dependencies = [
+    "pywebview",
+    "PySide6",
+    "qtpy",
+    "Pillow",
+    "truststore",
+]
+
+[tool.setuptools]
+packages = ["sfl", "sfl.services"]
+include-package-data = true
+
+[tool.setuptools.dynamic]
+version = {attr = "sfl.config.APP_VERSION"}
+
+[tool.setuptools.package-data]
+sfl = ["resources/*", "resources/fonts/*"]

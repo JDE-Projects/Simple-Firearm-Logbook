@@ -61,7 +61,7 @@ def free_port() -> int:
 
 
 def read_app_version() -> str:
-    path = os.path.join(REPO_ROOT, "simple_firearm_logbook.py")
+    path = os.path.join(REPO_ROOT, "sfl", "config.py")
     with open(path, encoding="utf-8") as source_file:
         source = source_file.read()
     match = re.search(r'APP_VERSION\s*=\s*"([^"]+)"', source)
@@ -73,12 +73,12 @@ def read_app_version() -> str:
 def stage_ui(temp_dir: str) -> None:
     """Copy just what the page needs into temp_dir."""
     shutil.copy2(
-        os.path.join(REPO_ROOT, "simple_firearm_logbook-UI.html"),
+        os.path.join(REPO_ROOT, "sfl", "resources", "simple_firearm_logbook-UI.html"),
         os.path.join(temp_dir, "index.html"),
     )
-    shutil.copy2(os.path.join(REPO_ROOT, "simple_firearm_logbook.png"), temp_dir)
+    shutil.copy2(os.path.join(REPO_ROOT, "sfl", "resources", "simple_firearm_logbook.png"), temp_dir)
     shutil.copytree(
-        os.path.join(REPO_ROOT, "fonts"), os.path.join(temp_dir, "fonts")
+        os.path.join(REPO_ROOT, "sfl", "resources", "fonts"), os.path.join(temp_dir, "fonts")
     )
 
 

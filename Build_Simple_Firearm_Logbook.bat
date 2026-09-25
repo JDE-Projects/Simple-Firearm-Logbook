@@ -35,9 +35,7 @@ echo Building executable (onedir, so the bundled Qt stays replaceable)...
 set QT_API=pyside6
 pyinstaller --onedir --windowed --name "Simple Firearm Logbook" ^
   --icon "simple_firearm_logbook.ico" ^
-  --add-data "simple_firearm_logbook-UI.html;." ^
-  --add-data "simple_firearm_logbook.png;." ^
-  --add-data "fonts;fonts" ^
+  --add-data "sfl\resources;resources" ^
   --collect-all PySide6 ^
   --collect-all qtpy ^
   --hidden-import truststore ^
