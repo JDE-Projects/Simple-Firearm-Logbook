@@ -37,6 +37,13 @@ Two ways to get it from the [Releases](../../releases) page, pick one:
 - **Portable .zip:** download `SimpleFirearmLogbook-vX.Y.Z.zip`, extract it, and run
   `Simple Firearm Logbook.exe` from inside the extracted folder. No install, good for
   a locked-down PC or a USB stick. Keep the folder together.
+
+Or install the same installer from the command line with WinGet:
+
+```
+winget install --exact --id JDEProjects.SimpleFirearmLogbook
+```
+
 Windows only, no Python or setup required. Unsigned, so SmartScreen may warn the
 first time: More info > Run anyway.
 
@@ -46,6 +53,7 @@ Simple Firearm Logbook doesn't update itself. The bottom bar has a **Check for u
 
 - **Installer:** download the new `SimpleFirearmLogbook-vX.Y.Z-setup.exe` and run it. It installs over your current copy and keeps your logbook database, photos, and documents.
 - **Portable .zip:** download and extract the new `SimpleFirearmLogbook-vX.Y.Z.zip`. To keep your logbook database, photos, and documents, copy `simple_firearm_logbook.db`, the `photos\` folder, the `attachments\` folder, and the `.pref` file from the old folder into the new one.
+- **WinGet:** run `winget upgrade --exact --id JDEProjects.SimpleFirearmLogbook`. It runs the installer over your current copy, same as above. The WinGet listing can trail a new release by a few days while Microsoft reviews it.
 
 Everything the app stores lives in the database, the photos folder, and the attachments folder next to the exe, so there's nothing else to carry over.
 
