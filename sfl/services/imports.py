@@ -6,7 +6,7 @@ from sfl.config import IMPORT_FIELDS
 from sfl.db import SaveRejected, _firearm_row_to_dict
 
 
-def import_csv_pick(window, log):
+def import_csv_pick(window, log, extension_fields=()):
     """Stage 1: native picker restricted to .csv, read as UTF-8 with a
     BOM tolerated (our own export and a plain spreadsheet "Save As CSV"
     both open cleanly), and parse into a header plus raw rows. Nothing
@@ -30,21 +30,24 @@ def import_csv_pick(window, log):
         header, rows = csv_import.read_import_csv_rows(text)
         if not header:
             return {"ok": False, "error": "That CSV file is empty."}
-        mapping = csv_import.guess_column_mapping(header)
+        mapping = csv_import.guess_column_mapping(header, extension_fields)
         log(f"CSV import file picked, {len(rows)} row(s)")
         return {
             "ok": True,
             "header": header,
             "rows": rows,
             "mapping": mapping,
-            "fields": [{"key": k, "label": v} for k, v in IMPORT_FIELDS],
+            "fields": (
+                [{"key": k, "label": v, "extension": False} for k, v in IMPORT_FIELDS]
+                + [{"key": k, "label": v, "extension": True} for k, v in extension_fields]
+            ),
         }
     except Exception as e:
         log(f"import_csv_pick failed: {e}")
         return {"ok": False, "error": "Couldn't read that CSV file."}
 
 
-def import_csv_preview(conn, log, rows, mapping):
+def import_csv_preview(conn, log, rows, mapping, extension_fields=()):
     """Stage 2: run every row through the shared validators and classify
     it as ok / duplicate-serial (soft warning) / error (specific reason
     and offending cell). Nothing touches the database except a read of
@@ -55,7 +58,9 @@ def import_csv_preview(conn, log, rows, mapping):
                 "SELECT serial_number FROM firearms WHERE serial_number<>''"
             ).fetchall()
         }
-        preview = csv_import.build_import_preview(rows or [], mapping or {}, existing_serials)
+        preview = csv_import.build_import_preview(
+            rows or [], mapping or {}, existing_serials, extension_fields
+        )
         return {"ok": True, "preview": preview}
     except Exception as e:
         log(f"import_csv_preview failed: {e}")
@@ -82,7 +87,8 @@ def import_csv_commit(conn, log, records, before_save=None):
                     cur.execute("SELECT * FROM firearms WHERE id=?", (firearm_id,)).fetchone()
                 )
                 before_save(cur, {"action": "imported", "firearm_id": firearm_id, "old": None,
-                                  "new": new, "extension_data": None})
+                                  "new": new,
+                                  "extension_data": record.get("extension_data")})
         conn.commit()
         log(f"CSV import committed, {len(imported)} firearm(s)")
         return {"ok": True, "imported": len(imported), "log_numbers": imported}

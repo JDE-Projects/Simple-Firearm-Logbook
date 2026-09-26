@@ -29,6 +29,7 @@ class AppDescription:
     schema_version: int = config.SCHEMA_VERSION
     extension_script: str | None = None
     extension_stylesheet: str | None = None
+    import_extension_fields: tuple = ()
 
 
 DEFAULT_APP_DESCRIPTION = AppDescription(

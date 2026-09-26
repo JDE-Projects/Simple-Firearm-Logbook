@@ -45,13 +45,13 @@ def read_import_csv_rows(text: str):
     return header, rows
 
 
-def guess_column_mapping(header: list) -> dict:
+def guess_column_mapping(header: list, extension_fields=()) -> dict:
     """Case-insensitive match of header names to our import field keys, so
     a round-trip of our own export maps perfectly. Returns
     {field_key: column_index_or_None}."""
     lower_header = [(h or "").strip().lower() for h in header]
     mapping = {}
-    for field_key, label in IMPORT_FIELDS:
+    for field_key, label in (*IMPORT_FIELDS, *extension_fields):
         idx = None
         for i, h in enumerate(lower_header):
             if h == label.lower():
@@ -81,7 +81,7 @@ def _import_cell(cells: list, mapping: dict, field_key: str) -> str:
     return raw
 
 
-def build_import_record(cells: list, mapping: dict):
+def build_import_record(cells: list, mapping: dict, extension_fields=()):
     """Validate and normalize one data row into a firearm record, routing
     every date and amount through the same validators the add screen uses.
     Returns (record_dict, None, None) on success, or (None, reason, cell)
@@ -162,10 +162,16 @@ def build_import_record(cells: list, mapping: dict):
         "disposition_amount": disposition_amount_s,
         "disposition_notes": disposition_notes_s,
     }
+    extension_data = {
+        key: _import_cell(cells, mapping, key).strip()
+        for key, _label in extension_fields
+        if mapping.get(key) is not None
+    }
+    record["extension_data"] = extension_data or None
     return record, None, None
 
 
-def build_import_preview(rows: list, mapping: dict, existing_serials) -> list:
+def build_import_preview(rows: list, mapping: dict, existing_serials, extension_fields=()) -> list:
     """Runs every row through build_import_record and classifies it for the
     preview: "error" (wrong column count or a failed validator, never
     importable), "duplicate" (serial already in the collection, a soft
@@ -185,7 +191,7 @@ def build_import_preview(rows: list, mapping: dict, existing_serials) -> list:
                 }
             )
             continue
-        record, reason, cell = build_import_record(row["cells"], mapping)
+        record, reason, cell = build_import_record(row["cells"], mapping, extension_fields)
         if record is None:
             preview.append(
                 {"row_num": row_num, "status": "error", "reason": reason, "cell": cell, "record": None}

@@ -13,7 +13,8 @@ prove the single-transaction, all-or-nothing rollback guarantee.
 import sqlite3
 
 import simple_firearm_logbook as app
-from sfl import csv_import
+from sfl import config, csv_import
+from sfl.launcher import AppDescription
 
 
 def _api(tmp_path):
@@ -98,6 +99,56 @@ def test_unrecognized_header_maps_to_none():
     mapping = app.guess_column_mapping(header)
     assert mapping["make"] is None
     assert mapping["model"] is None
+
+
+def test_extension_column_mapping_and_preview_data():
+    extension_fields = (("collection", "Collection"), ("owner_note", "Owner Note"))
+    header = ["Make", "Model", "collection"]
+    mapping = app.guess_column_mapping(header, extension_fields)
+    assert mapping["collection"] == 2
+    assert mapping["owner_note"] is None
+
+    record, reason, cell = app.build_import_record(
+        ["Glock", "19", "'=SUM(A1:A2) "], mapping, extension_fields
+    )
+    assert (reason, cell) == (None, None)
+    assert record["extension_data"] == {"collection": "=SUM(A1:A2)"}
+
+    unmapped = app.guess_column_mapping(["Make", "Model"], extension_fields)
+    record, reason, cell = app.build_import_record(["Glock", "19"], unmapped, extension_fields)
+    assert (reason, cell) == (None, None)
+    assert record["extension_data"] is None
+
+
+def test_import_pick_fields_include_extension_metadata(tmp_path):
+    csv_path = tmp_path / "firearms.csv"
+    csv_path.write_text("Make,Model,Collection\nGlock,19,Range\n", encoding="utf-8")
+
+    class Window:
+        def create_file_dialog(self, *_args, **_kwargs):
+            return str(csv_path)
+
+    api = app.Api()
+    api.set_window(Window())
+    default_result = api.import_csv_pick()
+    assert default_result["fields"] == [
+        {"key": key, "label": label, "extension": False}
+        for key, label in config.IMPORT_FIELDS
+    ]
+
+    description = AppDescription(
+        product_name="Embedding Logbook", app_id="example.logbook",
+        single_instance_name="example_instance", version="1.0", update_owner="example",
+        update_repo="example", update_link="https://example.invalid",
+        import_extension_fields=(("collection", "Collection"), ("shelf", "Shelf")),
+    )
+    api.set_app_description(description)
+    result = api.import_csv_pick()
+    assert result["mapping"]["collection"] == 2
+    assert result["fields"][-2:] == [
+        {"key": "collection", "label": "Collection", "extension": True},
+        {"key": "shelf", "label": "Shelf", "extension": True},
+    ]
 
 
 # ─────────────────────────────────────────────────────────────

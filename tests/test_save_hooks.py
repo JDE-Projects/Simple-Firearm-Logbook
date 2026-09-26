@@ -8,7 +8,7 @@ from sfl import config, paths
 from sfl.db import SaveRejected
 
 
-def _record(make="Glock", model="19"):
+def _record(make="Glock", model="19", extension_data=None):
     return {
         "make": make, "model": model, "serial_number": "", "firearm_type": "",
         "sub_type": "", "caliber": "", "acquisition_date": "", "acquired_from": "",
@@ -17,6 +17,7 @@ def _record(make="Glock", model="19"):
         "nfa_form_type": "", "nfa_stamp_date": "", "notes": "",
         "disposition_status": "Owned", "disposition_date": "", "disposition_to": "",
         "disposition_address": "", "disposition_amount": "", "disposition_notes": "",
+        "extension_data": extension_data,
     }
 
 
@@ -75,9 +76,15 @@ def test_each_write_path_calls_hook_in_its_transaction(tmp_path, action):
 def test_import_calls_the_hook_for_each_row(tmp_path):
     api = _api(tmp_path)
     try:
-        result = api.import_csv_commit([_record("Glock", "19"), _record("Sig", "P320")])
+        result = api.import_csv_commit([
+            _record("Glock", "19", extension_data={"collection": "Range"}),
+            _record("Sig", "P320", extension_data={"collection": "Safe"}),
+        ])
         assert result["ok"], result
         assert [event["action"] for event in api.events] == ["imported", "imported"]
+        assert [event["extension_data"] for event in api.events] == [
+            {"collection": "Range"}, {"collection": "Safe"}
+        ]
         assert api._conn.execute("SELECT COUNT(*) FROM hook_rows").fetchone()[0] == 2
     finally:
         api.close_conn()
@@ -139,7 +146,10 @@ def test_rejected_write_leaves_database_unchanged(tmp_path, action):
 def test_later_import_rejection_rolls_back_every_row_and_counter(tmp_path):
     api = _api(tmp_path, LaterImportRejectingApi)
     try:
-        result = api.import_csv_commit([_record("Glock", "19"), _record("Sig", "P320")])
+        result = api.import_csv_commit([
+            _record("Glock", "19", extension_data={"collection": "Range"}),
+            _record("Sig", "P320", extension_data={"collection": "Safe"}),
+        ])
         assert result == {"ok": False, "error": "Not allowed"}
         assert api._conn.execute("SELECT COUNT(*) FROM firearms").fetchone()[0] == 0
         assert api._conn.execute("SELECT next_log_number FROM counters").fetchone()[0] == 1

@@ -300,14 +300,22 @@ class Api:
         BOM tolerated (our own export and a plain spreadsheet "Save As CSV"
         both open cleanly), and parse into a header plus raw rows. Nothing
         touches the database here; the page shows a mapping step next."""
-        return imports_service.import_csv_pick(self._window, self.log)
+        extension_fields = (
+            self._app_description.import_extension_fields if self._app_description else ()
+        )
+        return imports_service.import_csv_pick(self._window, self.log, extension_fields)
 
     def import_csv_preview(self, rows, mapping):
         """Stage 2: run every row through the shared validators and classify
         it as ok / duplicate-serial (soft warning) / error (specific reason
         and offending cell). Nothing touches the database except a read of
         existing serials, used only to flag duplicates."""
-        return imports_service.import_csv_preview(self._conn, self.log, rows, mapping)
+        extension_fields = (
+            self._app_description.import_extension_fields if self._app_description else ()
+        )
+        return imports_service.import_csv_preview(
+            self._conn, self.log, rows, mapping, extension_fields
+        )
 
     def import_csv_commit(self, records):
         """Stage 3: import only the rows the user accepted, in a single
