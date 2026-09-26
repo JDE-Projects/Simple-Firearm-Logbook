@@ -15,7 +15,7 @@ If you enjoyed this project and would like to buy me a coffee, check out my [Ko-
 - Photo attachments for each firearm: drag image files onto the add-photo window or browse for them, with a starred primary photo used in lists and exports.
 - Document attachments for each firearm (receipts, permits, paperwork), with a count shown in the list.
 - NFA and trust tracking: flag NFA items (form type and stamp date) and firearms held in a trust, each shown as a badge in the list.
-- Search the list by make, model, type, status, and more, plus one-tap filters for NFA-only, trust-only, or hiding disposed firearms.
+- Search the list by make, model, type, status, and more, and filter it by group (General, NFA, Trust; tick several to see any of them) or show disposed firearms.
 - Disposition tracking (sold, traded, lost, stolen) that keeps the record instead of deleting it.
 - CSV import to bring in an existing collection, with a preview and per-row checks before anything is saved.
 - Single-firearm HTML export with embedded photos, ready to share or archive standalone.
