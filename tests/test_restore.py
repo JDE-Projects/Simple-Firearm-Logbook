@@ -16,6 +16,7 @@ import os
 import shutil
 import sqlite3
 import zipfile
+from pathlib import Path
 
 import sfl.services.restore as restore_mod
 import simple_firearm_logbook as app
@@ -430,3 +431,134 @@ def test_restore_commit_rolls_back_on_failure(tmp_path, monkeypatch):
         assert rows == [("Ruger", "10/22")]
     finally:
         restored.close()
+
+
+def test_restore_commit_keeps_originals_when_rollback_fails_setting_aside(tmp_path, monkeypatch):
+    live_dir = tmp_path / "live"
+    live_dir.mkdir()
+    monkeypatch.setattr(paths, "app_dir", lambda: str(live_dir))
+    conn = app.open_db(str(live_dir / config.DB_FILENAME))
+    _insert_firearm(conn, "00001", "Ruger", "10/22")
+    conn.commit()
+    conn.close()
+    (live_dir / config.PHOTOS_DIRNAME).mkdir()
+    original_photo = live_dir / config.PHOTOS_DIRNAME / "original.jpg"
+    original_photo.write_bytes(b"original")
+
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    staged_conn = app.open_db(str(staging / config.DB_FILENAME))
+    staged_conn.close()
+
+    original_move = shutil.move
+
+    def fail_setting_aside_and_move_back(src, dst, *args, **kwargs):
+        if os.path.abspath(str(src)) == os.path.abspath(str(live_dir / config.PHOTOS_DIRNAME)):
+            raise OSError("simulated setting-aside failure")
+        if os.path.basename(str(src)) == config.DB_FILENAME and "sfl_restore_aside_" in str(src):
+            raise OSError("simulated move-back failure")
+        return original_move(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(restore_mod.shutil, "move", fail_setting_aside_and_move_back)
+    logs, log = _log_collector()
+    result = restore_commit(str(staging), log)
+
+    kept = result["kept_folder"]
+    try:
+        assert result["ok"] is False
+        assert kept in result["error"]
+        assert "not changed" not in result["error"].lower()
+        assert "could not be fully put back" in result["error"].lower()
+        assert (Path(kept) / config.DB_FILENAME).is_file()
+        assert original_photo.is_file()
+        assert any(kept in message for message in logs)
+    finally:
+        shutil.rmtree(kept, ignore_errors=True)
+
+
+def test_restore_commit_keeps_originals_when_rollback_fails_moving_backup_in(tmp_path, monkeypatch):
+    live_dir = tmp_path / "live"
+    live_dir.mkdir()
+    monkeypatch.setattr(paths, "app_dir", lambda: str(live_dir))
+    conn = app.open_db(str(live_dir / config.DB_FILENAME))
+    _insert_firearm(conn, "00001", "Ruger", "10/22")
+    conn.commit()
+    conn.close()
+
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    staged_db = staging / config.DB_FILENAME
+    staged_conn = app.open_db(str(staged_db))
+    staged_conn.close()
+
+    original_move = shutil.move
+
+    def fail_backup_and_move_back(src, dst, *args, **kwargs):
+        if os.path.abspath(str(src)) == os.path.abspath(str(staged_db)):
+            raise OSError("simulated backup move failure")
+        if os.path.basename(str(src)) == config.DB_FILENAME and "sfl_restore_aside_" in str(src):
+            raise OSError("simulated move-back failure")
+        return original_move(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(restore_mod.shutil, "move", fail_backup_and_move_back)
+    logs, log = _log_collector()
+    result = restore_commit(str(staging), log)
+
+    kept = result["kept_folder"]
+    try:
+        assert result["ok"] is False
+        assert kept in result["error"]
+        assert "not changed" not in result["error"].lower()
+        assert "could not be fully put back" in result["error"].lower()
+        assert (Path(kept) / config.DB_FILENAME).is_file()
+        assert any(kept in message for message in logs)
+    finally:
+        shutil.rmtree(kept, ignore_errors=True)
+
+
+def test_restore_commit_keeps_originals_when_a_partial_restore_cannot_be_cleared(tmp_path, monkeypatch):
+    live_dir = tmp_path / "live"
+    live_dir.mkdir()
+    monkeypatch.setattr(paths, "app_dir", lambda: str(live_dir))
+    conn = app.open_db(str(live_dir / config.DB_FILENAME))
+    _insert_firearm(conn, "00001", "Ruger", "10/22")
+    conn.commit()
+    conn.close()
+    (live_dir / config.PHOTOS_DIRNAME).mkdir()
+    (live_dir / config.PHOTOS_DIRNAME / "original.jpg").write_bytes(b"original")
+
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    staged_conn = app.open_db(str(staging / config.DB_FILENAME))
+    staged_conn.close()
+    (staging / config.PHOTOS_DIRNAME).mkdir()
+    (staging / config.PHOTOS_DIRNAME / "backup.jpg").write_bytes(b"backup")
+    (staging / config.ATTACHMENTS_DIRNAME).mkdir()
+
+    live_photos = os.path.abspath(str(live_dir / config.PHOTOS_DIRNAME))
+    original_move = shutil.move
+    original_cleanup = restore_mod._cleanup_path
+
+    def fail_attachments_move(src, dst, *args, **kwargs):
+        if os.path.basename(str(src)) == config.ATTACHMENTS_DIRNAME and "staging" in str(src):
+            raise OSError("simulated backup move failure")
+        return original_move(src, dst, *args, **kwargs)
+
+    def keep_restored_photos(path, log):
+        if os.path.abspath(str(path)) == live_photos:
+            return  # simulates a locked folder that can't be removed
+        original_cleanup(path, log)
+
+    monkeypatch.setattr(restore_mod.shutil, "move", fail_attachments_move)
+    monkeypatch.setattr(restore_mod, "_cleanup_path", keep_restored_photos)
+    logs, log = _log_collector()
+    result = restore_commit(str(staging), log)
+
+    kept = result["kept_folder"]
+    try:
+        assert result["ok"] is False
+        assert "not changed" not in result["error"].lower()
+        assert (Path(kept) / config.PHOTOS_DIRNAME / "original.jpg").is_file()
+        assert not (live_dir / config.PHOTOS_DIRNAME / config.PHOTOS_DIRNAME).exists()
+    finally:
+        shutil.rmtree(kept, ignore_errors=True)

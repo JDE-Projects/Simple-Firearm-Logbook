@@ -1,5 +1,5 @@
 """
-Tests for Phase 1 hardening (data safety) in simple_firearm_logbook.py:
+Tests for data-safety hardening in simple_firearm_logbook.py:
 
   - delete_firearm: a photo or attachment file that can't be removed from
     disk no longer produces a silent "ok" result. The delete still goes

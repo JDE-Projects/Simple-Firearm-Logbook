@@ -215,7 +215,17 @@ def restore_commit(staging_dir, log):
                 moved_aside.append((aside_path, original))
     except Exception as e:
         log(f"restore_commit: couldn't set the current logbook aside: {e}")
-        _rollback(moved_aside, log)
+        rollback_complete = _rollback(moved_aside, log)
+        if not rollback_complete:
+            log(f"restore_commit: originals kept in {aside_dir}")
+            return {
+                "ok": False,
+                "error": (
+                    "Restore failed. The logbook could not be fully put back. "
+                    f"The original files are in {aside_dir}."
+                ),
+                "kept_folder": aside_dir,
+            }
         _cleanup_path(aside_dir, log)
         return {"ok": False, "error": "Couldn't replace the current logbook." + not_changed}
 
@@ -229,7 +239,17 @@ def restore_commit(staging_dir, log):
         log(f"restore_commit: failed moving the backup into place, rolling back: {e}")
         for path in (live_db, live_photos, live_attachments):
             _cleanup_path(path, log)
-        _rollback(moved_aside, log)
+        rollback_complete = _rollback(moved_aside, log)
+        if not rollback_complete:
+            log(f"restore_commit: originals kept in {aside_dir}")
+            return {
+                "ok": False,
+                "error": (
+                    "Restore failed. The logbook could not be fully put back. "
+                    f"The original files are in {aside_dir}."
+                ),
+                "kept_folder": aside_dir,
+            }
         _cleanup_path(aside_dir, log)
         return {"ok": False, "error": "Couldn't restore the backup." + not_changed}
 
@@ -274,13 +294,21 @@ def _sqlite_opens_cleanly(db_path, log, context):
 def _rollback(moved_aside, log):
     """Puts every moved-aside original back where it came from, in reverse
     order. Best-effort: a failure here is logged, never raised, since this
-    already runs from inside another failure's handling."""
+    already runs from inside another failure's handling. Returns True only
+    when every original went back."""
+    complete = True
     for aside_path, original in reversed(moved_aside):
         try:
             _cleanup_path(original, log)
+            if os.path.exists(original):
+                # shutil.move would nest the original inside the leftover
+                # folder instead of putting it back, so count it as failed.
+                raise OSError(f"couldn't clear {original} before moving it back")
             shutil.move(aside_path, original)
         except Exception as e:
             log(f"restore_commit: rollback failed for {original}: {e}")
+            complete = False
+    return complete
 
 
 def _cleanup_path(path, log):
