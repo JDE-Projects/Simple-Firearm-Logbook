@@ -230,19 +230,7 @@ def restore_commit(staging_dir, log):
                 moved_aside.append((aside_path, original))
     except Exception as e:
         log(f"restore_commit: couldn't set the current logbook aside: {e}")
-        rollback_complete = _rollback(moved_aside, log)
-        if not rollback_complete:
-            log(f"restore_commit: originals kept in {aside_dir}")
-            return {
-                "ok": False,
-                "error": (
-                    "Restore failed. The logbook could not be fully put back. "
-                    f"The original files are in {aside_dir}."
-                ),
-                "kept_folder": aside_dir,
-            }
-        _cleanup_path(aside_dir, log)
-        return {"ok": False, "error": "Couldn't replace the current logbook." + not_changed}
+        return _undo_swap(moved_aside, aside_dir, log, "Couldn't replace the current logbook." + not_changed)
 
     try:
         shutil.move(staged_db, live_db)
@@ -254,19 +242,7 @@ def restore_commit(staging_dir, log):
         log(f"restore_commit: failed moving the backup into place, rolling back: {e}")
         for path in (live_db, live_photos, live_attachments):
             _cleanup_path(path, log)
-        rollback_complete = _rollback(moved_aside, log)
-        if not rollback_complete:
-            log(f"restore_commit: originals kept in {aside_dir}")
-            return {
-                "ok": False,
-                "error": (
-                    "Restore failed. The logbook could not be fully put back. "
-                    f"The original files are in {aside_dir}."
-                ),
-                "kept_folder": aside_dir,
-            }
-        _cleanup_path(aside_dir, log)
-        return {"ok": False, "error": "Couldn't restore the backup." + not_changed}
+        return _undo_swap(moved_aside, aside_dir, log, "Couldn't restore the backup." + not_changed)
 
     _cleanup_path(aside_dir, log)
     _cleanup_path(staging_dir, log)
@@ -304,6 +280,25 @@ def _sqlite_opens_cleanly(db_path, log, context):
     except sqlite3.DatabaseError as e:
         log(f"{context}: staged database won't open: {e}")
         return False
+
+
+def _undo_swap(moved_aside, aside_dir, log, error):
+    """Rolls a failed swap back and returns the failure result. When every
+    original went back, the set-aside folder is removed and the result
+    carries error. Otherwise the folder is kept, since it holds the only
+    copy of what didn't go back, and the error names it."""
+    if not _rollback(moved_aside, log):
+        log(f"restore_commit: originals kept in {aside_dir}")
+        return {
+            "ok": False,
+            "error": (
+                "Restore failed. The logbook could not be fully put back. "
+                f"The original files are in {aside_dir}."
+            ),
+            "kept_folder": aside_dir,
+        }
+    _cleanup_path(aside_dir, log)
+    return {"ok": False, "error": error}
 
 
 def _rollback(moved_aside, log):
