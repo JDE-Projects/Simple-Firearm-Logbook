@@ -140,6 +140,53 @@ def test_newer_schema_version_blocks(tmp_path, monkeypatch):
     assert preview["block_reason"]
 
 
+def test_schema_version_is_checked_against_the_supplied_version(tmp_path, monkeypatch):
+    source_dir = tmp_path / "source"
+    dest_zip = tmp_path / "backup.zip"
+    source_dir.mkdir()
+    _build_backup(tmp_path, monkeypatch, source_dir, dest_zip)
+
+    def bump_schema(entries):
+        manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+        manifest["schema_version"] = 2
+        entries["manifest.json"] = json.dumps(manifest).encode("utf-8")
+
+    _rewrite_zip(dest_zip, bump_schema)
+    _, log = _log_collector()
+    blocked = inspect_backup(str(dest_zip), str(tmp_path / "blocked"), log, schema_version=1)
+    accepted = inspect_backup(str(dest_zip), str(tmp_path / "accepted"), log, schema_version=2)
+    assert blocked["blocked"] is True
+    assert accepted["blocked"] is False
+
+
+def test_api_uses_description_schema_version_and_opener(tmp_path, monkeypatch):
+    api = app.Api()
+    calls = {}
+
+    class Description:
+        schema_version = 7
+
+        @staticmethod
+        def open_database(path, schema_version):
+            calls["opened"] = (path, schema_version)
+            return app.open_db(path, schema_version)
+
+    api.set_app_description(Description())
+    def fake_pick(window, log, schema_version):
+        calls["picked"] = schema_version
+        return {"ok": True}
+
+    monkeypatch.setattr(restore_mod, "restore_pick", fake_pick)
+    assert api.restore_pick()["ok"]
+    assert calls["picked"] == 7
+    api._restore_staging = str(tmp_path / "staging")
+    monkeypatch.setattr(restore_mod, "restore_commit", lambda staging, log: {"ok": True})
+    monkeypatch.setattr(paths, "app_dir", lambda: str(tmp_path))
+    assert api.restore_commit()["ok"]
+    assert calls["opened"] == (os.path.join(str(tmp_path), config.DB_FILENAME), 7)
+    api.close_conn()
+
+
 def test_newer_format_version_blocks(tmp_path, monkeypatch):
     source_dir = tmp_path / "source"
     dest_zip = tmp_path / "backup.zip"

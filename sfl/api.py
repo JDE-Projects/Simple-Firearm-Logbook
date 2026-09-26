@@ -80,6 +80,9 @@ class Api:
     def _attachment_stats(self, firearm_id):
         return attachments_service._attachment_stats(self._conn, firearm_id)
 
+    def _before_save(self, cur, event):
+        """Override point an embedding app can use before a firearm save commits."""
+
     def list_firearms(self):
         return firearms_service.list_firearms(self._conn, self.log)
 
@@ -90,20 +93,21 @@ class Api:
                         acquisition_date="", acquired_from="", purchase_price="",
                         estimated_value="", insured_value="", storage_location="", notes="",
                         sub_type="", held_in_trust=0, trust_name="", is_nfa=0,
-                        nfa_form_type="", nfa_stamp_date=""):
+                        nfa_form_type="", nfa_stamp_date="", extension_data=None):
         return firearms_service.create_firearm(
             self._conn, self.log, make, model, serial_number, firearm_type, caliber,
             acquisition_date, acquired_from, purchase_price,
             estimated_value, insured_value, storage_location, notes,
             sub_type, held_in_trust, trust_name, is_nfa,
             nfa_form_type, nfa_stamp_date,
+            extension_data=extension_data, before_save=self._before_save,
         )
 
     def update_firearm(self, firearm_id, make, model, serial_number="", firearm_type="", caliber="",
                         acquisition_date="", acquired_from="", purchase_price="",
                         estimated_value="", insured_value="", storage_location="", notes="",
                         sub_type="", held_in_trust=0, trust_name="", is_nfa=0,
-                        nfa_form_type="", nfa_stamp_date=""):
+                        nfa_form_type="", nfa_stamp_date="", extension_data=None):
         """Edits identity/notes fields only; log number and disposition are
         untouched (disposition has its own editing action)."""
         return firearms_service.update_firearm(
@@ -112,23 +116,27 @@ class Api:
             estimated_value, insured_value, storage_location, notes,
             sub_type, held_in_trust, trust_name, is_nfa,
             nfa_form_type, nfa_stamp_date,
+            extension_data=extension_data, before_save=self._before_save,
         )
 
-    def update_disposition(self, firearm_id, status, date="", to="", address="", amount="", notes=""):
+    def update_disposition(self, firearm_id, status, date="", to="", address="", amount="", notes="",
+                           extension_data=None):
         """Record or clear a disposition. Setting the status back to Owned
         clears the rest of the disposition fields, since the UI hides them
         once a firearm is owned again."""
         return firearms_service.update_disposition(
-            self._conn, self.log, firearm_id, status, date, to, address, amount, notes
+            self._conn, self.log, firearm_id, status, date, to, address, amount, notes,
+            extension_data=extension_data, before_save=self._before_save,
         )
 
-    def delete_firearm(self, firearm_id, export_backup_first=False):
+    def delete_firearm(self, firearm_id, export_backup_first=False, extension_data=None):
         """Delete a firearm and its photo and document files. The log number
         is never reissued. If export_backup_first is set, a backup zip is
         produced (with its own save dialog) before anything is deleted;
         cancelling that save dialog cancels the whole delete."""
         return firearms_service.delete_firearm(
-            self._conn, self._window, self.log, firearm_id, export_backup_first
+            self._conn, self._window, self.log, firearm_id, export_backup_first,
+            extension_data=extension_data, before_save=self._before_save,
         )
 
     # --- photos -----------------------------------------------------------------
@@ -247,7 +255,8 @@ class Api:
         validates the chosen backup into a temp staging folder. Nothing is
         replaced yet; the UI shows a preview next. Holds the staging path
         on the Api until restore_commit or restore_cancel."""
-        result = restore_service.restore_pick(self._window, self.log)
+        schema_version = (self._app_description.schema_version if self._app_description else config.SCHEMA_VERSION)
+        result = restore_service.restore_pick(self._window, self.log, schema_version)
         if result.get("ok") and result.get("staging"):
             self._restore_staging = result["staging"]
         return result
@@ -264,7 +273,9 @@ class Api:
         result = restore_service.restore_commit(staging, self.log)
         db_path = os.path.join(paths.app_dir(), config.DB_FILENAME)
         try:
-            self.set_conn(db.open_db(db_path))
+            opener = self._app_description.open_database if self._app_description else db.open_db
+            schema_version = (self._app_description.schema_version if self._app_description else config.SCHEMA_VERSION)
+            self.set_conn(opener(db_path, schema_version))
         except Exception as e:
             self.log(f"restore_commit: couldn't reopen the database: {e}")
             if result.get("ok"):
@@ -303,7 +314,9 @@ class Api:
         transaction: all succeed or the whole import rolls back, so a
         half-import is impossible. Each row gets a fresh app-assigned log
         number; an imported Log Number column is never honored."""
-        return imports_service.import_csv_commit(self._conn, self.log, records)
+        return imports_service.import_csv_commit(
+            self._conn, self.log, records, before_save=self._before_save
+        )
 
     # --- preferences (local file, not stored in the db) ----------------------
     def _load_theme(self) -> str:

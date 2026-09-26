@@ -6,7 +6,7 @@ import datetime
 import os
 
 from sfl import config, paths
-from sfl.db import _firearm_row_to_dict, _get_next_log_number
+from sfl.db import SaveRejected, _firearm_row_to_dict, _get_next_log_number
 from sfl.services import attachments as attachments_service
 from sfl.services import photos as photos_service
 from sfl.services import settings as settings_service
@@ -98,7 +98,7 @@ def create_firearm(conn, log, make, model, serial_number="", firearm_type="", ca
                     acquisition_date="", acquired_from="", purchase_price="",
                     estimated_value="", insured_value="", storage_location="", notes="",
                     sub_type="", held_in_trust=0, trust_name="", is_nfa=0,
-                    nfa_form_type="", nfa_stamp_date=""):
+                    nfa_form_type="", nfa_stamp_date="", extension_data=None, before_save=None):
     try:
         make_s = (make or "").strip()
         model_s = (model or "").strip()
@@ -153,9 +153,17 @@ def create_firearm(conn, log, make, model, serial_number="", firearm_type="", ca
              now, now),
         )
         new_id = cur.lastrowid
+        if before_save:
+            new = _firearm_row_to_dict(cur.execute("SELECT * FROM firearms WHERE id=?", (new_id,)).fetchone())
+            before_save(cur, {"action": "created", "firearm_id": new_id, "old": None, "new": new,
+                              "extension_data": extension_data})
         conn.commit()
         log(f"Firearm {log_number} created")
         return {"ok": True, "firearm_id": new_id, "log_number": log_number}
+    except SaveRejected as e:
+        conn.rollback()
+        log(f"create_firearm rejected: {e}")
+        return {"ok": False, "error": str(e)}
     except Exception as e:
         conn.rollback()
         log(f"create_firearm failed: {e}")
@@ -166,31 +174,40 @@ def update_firearm(conn, log, firearm_id, make, model, serial_number="", firearm
                     acquisition_date="", acquired_from="", purchase_price="",
                     estimated_value="", insured_value="", storage_location="", notes="",
                     sub_type="", held_in_trust=0, trust_name="", is_nfa=0,
-                    nfa_form_type="", nfa_stamp_date=""):
+                    nfa_form_type="", nfa_stamp_date="", extension_data=None, before_save=None):
     """Edits identity/notes fields only; log number and disposition are
     untouched (disposition has its own editing action)."""
     try:
-        row = _get_firearm_row(conn, firearm_id)
+        cur = conn.cursor()
+        cur.execute("BEGIN")
+        row = cur.execute("SELECT * FROM firearms WHERE id=?", (firearm_id,)).fetchone()
         if row is None:
+            conn.rollback()
             return {"ok": False, "error": "That firearm no longer exists."}
         make_s = (make or "").strip()
         model_s = (model or "").strip()
         if not make_s or not model_s:
+            conn.rollback()
             return {"ok": False, "error": "Make and model are required."}
         date_s, err = parse_iso_date_optional(acquisition_date)
         if err:
+            conn.rollback()
             return {"ok": False, "error": err}
         price_s, err = parse_decimal_optional(purchase_price)
         if err:
+            conn.rollback()
             return {"ok": False, "error": err}
         value_s, err = parse_decimal_optional(estimated_value)
         if err:
+            conn.rollback()
             return {"ok": False, "error": err}
         insured_s, err = parse_decimal_optional(insured_value)
         if err:
+            conn.rollback()
             return {"ok": False, "error": err}
         nfa_stamp_date_s, err = parse_iso_date_optional(nfa_stamp_date)
         if err:
+            conn.rollback()
             return {"ok": False, "error": err}
         serial_s = (serial_number or "").strip()
         type_s = (firearm_type or "").strip()
@@ -209,7 +226,7 @@ def update_firearm(conn, log, firearm_id, make, model, serial_number="", firearm
             nfa_form_type_s = ""
             nfa_stamp_date_s = ""
         now = datetime.datetime.now().isoformat(timespec="seconds")
-        conn.execute(
+        cur.execute(
             "UPDATE firearms SET make=?, model=?, serial_number=?, firearm_type=?, caliber=?, "
             "acquisition_date=?, acquired_from=?, purchase_price=?, estimated_value=?, "
             "insured_value=?, storage_location=?, notes=?, "
@@ -220,54 +237,79 @@ def update_firearm(conn, log, firearm_id, make, model, serial_number="", firearm
              sub_type_s, held_in_trust_i, trust_name_s, is_nfa_i, nfa_form_type_s, nfa_stamp_date_s,
              now, firearm_id),
         )
+        if before_save:
+            new = _firearm_row_to_dict(cur.execute("SELECT * FROM firearms WHERE id=?", (firearm_id,)).fetchone())
+            before_save(cur, {"action": "updated", "firearm_id": firearm_id,
+                              "old": _firearm_row_to_dict(row), "new": new,
+                              "extension_data": extension_data})
         conn.commit()
         log(f"Firearm {row['log_number']} updated")
         return {"ok": True}
+    except SaveRejected as e:
+        conn.rollback()
+        log(f"update_firearm rejected: {e}")
+        return {"ok": False, "error": str(e)}
     except Exception as e:
         conn.rollback()
         log(f"update_firearm failed: {e}")
         return {"ok": False, "error": "Couldn't save the firearm."}
 
 
-def update_disposition(conn, log, firearm_id, status, date="", to="", address="", amount="", notes=""):
+def update_disposition(conn, log, firearm_id, status, date="", to="", address="", amount="", notes="",
+                       extension_data=None, before_save=None):
     """Record or clear a disposition. Setting the status back to Owned
     clears the rest of the disposition fields, since the UI hides them
     once a firearm is owned again."""
     try:
-        row = _get_firearm_row(conn, firearm_id)
+        cur = conn.cursor()
+        cur.execute("BEGIN")
+        row = cur.execute("SELECT * FROM firearms WHERE id=?", (firearm_id,)).fetchone()
         if row is None:
+            conn.rollback()
             return {"ok": False, "error": "That firearm no longer exists."}
         status_s = (status or "Owned").strip()
         if status_s not in config.DISPOSITION_STATUSES:
+            conn.rollback()
             return {"ok": False, "error": "Choose a valid disposition status."}
         if status_s == "Owned":
             date_s = to_s = address_s = amount_s = notes_s = ""
         else:
             date_s, err = parse_iso_date_optional(date)
             if err:
+                conn.rollback()
                 return {"ok": False, "error": err}
             amount_s, err = parse_decimal_optional(amount)
             if err:
+                conn.rollback()
                 return {"ok": False, "error": err}
             to_s = (to or "").strip()
             address_s = (address or "").strip()
             notes_s = (notes or "").strip()
         now = datetime.datetime.now().isoformat(timespec="seconds")
-        conn.execute(
+        cur.execute(
             "UPDATE firearms SET disposition_status=?, disposition_date=?, disposition_to=?, "
             "disposition_address=?, disposition_amount=?, disposition_notes=?, updated_at=? WHERE id=?",
             (status_s, date_s, to_s, address_s, amount_s, notes_s, now, firearm_id),
         )
+        if before_save:
+            new = _firearm_row_to_dict(cur.execute("SELECT * FROM firearms WHERE id=?", (firearm_id,)).fetchone())
+            before_save(cur, {"action": "disposition", "firearm_id": firearm_id,
+                              "old": _firearm_row_to_dict(row), "new": new,
+                              "extension_data": extension_data})
         conn.commit()
         log(f"Disposition for firearm {row['log_number']} set to {status_s}")
         return {"ok": True}
+    except SaveRejected as e:
+        conn.rollback()
+        log(f"update_disposition rejected: {e}")
+        return {"ok": False, "error": str(e)}
     except Exception as e:
         conn.rollback()
         log(f"update_disposition failed: {e}")
         return {"ok": False, "error": "Couldn't save the disposition."}
 
 
-def delete_firearm(conn, window, log, firearm_id, export_backup_first=False):
+def delete_firearm(conn, window, log, firearm_id, export_backup_first=False, extension_data=None, before_save=None):
     """Delete a firearm and its photo and document files. The log number
     is never reissued. If export_backup_first is set, a backup zip is
     produced (with its own save dialog) before anything is deleted;
@@ -275,20 +317,26 @@ def delete_firearm(conn, window, log, firearm_id, export_backup_first=False):
     from sfl.services import export as export_service
 
     try:
-        row = _get_firearm_row(conn, firearm_id)
-        if row is None:
-            return {"ok": False, "error": "That firearm no longer exists."}
         if export_backup_first:
             backup_result = export_service._export_single_backup_zip_internal(conn, window, log, firearm_id)
             if not backup_result.get("ok") or backup_result.get("cancelled"):
                 return backup_result
+        cur = conn.cursor()
+        cur.execute("BEGIN")
+        row = cur.execute("SELECT * FROM firearms WHERE id=?", (firearm_id,)).fetchone()
+        if row is None:
+            conn.rollback()
+            return {"ok": False, "error": "That firearm no longer exists."}
         photos = conn.execute(
             "SELECT filename FROM photos WHERE firearm_id=?", (firearm_id,)
         ).fetchall()
         attachments = conn.execute(
             "SELECT filename FROM attachments WHERE firearm_id=?", (firearm_id,)
         ).fetchall()
-        cur = conn.cursor()
+        if before_save:
+            before_save(cur, {"action": "deleted", "firearm_id": firearm_id,
+                              "old": _firearm_row_to_dict(row), "new": None,
+                              "extension_data": extension_data})
         cur.execute("DELETE FROM photos WHERE firearm_id=?", (firearm_id,))
         # Foreign keys are enforced (PRAGMA foreign_keys = ON), so attachment
         # rows must go before the firearm row, same as photos.
@@ -319,6 +367,10 @@ def delete_firearm(conn, window, log, firearm_id, export_backup_first=False):
                 "warning": f"The record was deleted, but {len(failed_paths)} file(s) could not be removed from disk. See the log for details.",
             }
         return {"ok": True}
+    except SaveRejected as e:
+        conn.rollback()
+        log(f"delete_firearm rejected: {e}")
+        return {"ok": False, "error": str(e)}
     except Exception as e:
         conn.rollback()
         log(f"delete_firearm failed: {e}")

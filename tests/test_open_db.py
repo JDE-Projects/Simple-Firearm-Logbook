@@ -152,6 +152,23 @@ def test_newer_schema_version_raises_newer_schema_error(tmp_path):
         app.open_db(db_path)
 
 
+def test_schema_version_is_supplied_by_the_caller(tmp_path):
+    db_path = str(tmp_path / "higher.db")
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA user_version = 2")
+    conn.commit()
+    conn.close()
+
+    with pytest.raises(app.NewerSchemaError):
+        app.open_db(db_path, schema_version=1)
+
+    conn = app.open_db(db_path, schema_version=2)
+    try:
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == 2
+    finally:
+        conn.close()
+
+
 def test_newer_schema_database_is_left_untouched(tmp_path):
     db_path = str(tmp_path / "newer.db")
     newer_version = app.SCHEMA_VERSION + 1

@@ -21,6 +21,7 @@ def test_default_description_matches_current_app_values():
     )
     assert description.api_class is launcher.Api
     assert description.open_database is launcher.open_db
+    assert description.schema_version == config.SCHEMA_VERSION
     assert description.extension_script is None
     assert description.extension_stylesheet is None
 
@@ -53,8 +54,9 @@ def test_run_uses_custom_api_and_database_opener_and_sets_config(monkeypatch, tm
         def close_conn(self):
             calls["closed"] = True
 
-    def open_database(path):
+    def open_database(path, schema_version):
         calls["db_path"] = path
+        calls["schema_version"] = schema_version
         return "connection"
 
     description = launcher.AppDescription(
@@ -88,6 +90,7 @@ def test_run_uses_custom_api_and_database_opener_and_sets_config(monkeypatch, tm
 
     assert calls["mutex"] == "Example_EmbeddingLogbook"
     assert calls["db_path"] == os.path.join(str(tmp_path), config.DB_FILENAME)
+    assert calls["schema_version"] == config.SCHEMA_VERSION
     assert calls["conn"] == "connection"
     assert calls["description"] is description
     assert calls["window_args"][0][0] == "Embedding Logbook"
@@ -110,7 +113,7 @@ def test_run_reports_newer_schema_from_custom_database_opener(monkeypatch, tmp_p
         update_owner="example-owner",
         update_repo="example-repo",
         update_link="https://example.invalid/update",
-        open_database=lambda path: (_ for _ in ()).throw(NewerSchemaError()),
+        open_database=lambda path, schema_version: (_ for _ in ()).throw(NewerSchemaError()),
     )
     calls = []
     monkeypatch.setattr(launcher, "app_dir", lambda: str(tmp_path))

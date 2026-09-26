@@ -3,6 +3,7 @@ transaction. Thin wrappers around sfl.csv_import's pure parsing/validation
 functions that add the file picker, the database, and the transaction."""
 from sfl import csv_import
 from sfl.config import IMPORT_FIELDS
+from sfl.db import SaveRejected, _firearm_row_to_dict
 
 
 def import_csv_pick(window, log):
@@ -61,7 +62,7 @@ def import_csv_preview(conn, log, rows, mapping):
         return {"ok": False, "error": "Couldn't validate that file."}
 
 
-def import_csv_commit(conn, log, records):
+def import_csv_commit(conn, log, records, before_save=None):
     """Stage 3: import only the rows the user accepted, in a single
     transaction: all succeed or the whole import rolls back, so a
     half-import is impossible. Each row gets a fresh app-assigned log
@@ -75,9 +76,20 @@ def import_csv_commit(conn, log, records):
         for record in records:
             log_number = csv_import._insert_imported_firearm(cur, record)
             imported.append(log_number)
+            if before_save:
+                firearm_id = cur.lastrowid
+                new = _firearm_row_to_dict(
+                    cur.execute("SELECT * FROM firearms WHERE id=?", (firearm_id,)).fetchone()
+                )
+                before_save(cur, {"action": "imported", "firearm_id": firearm_id, "old": None,
+                                  "new": new, "extension_data": None})
         conn.commit()
         log(f"CSV import committed, {len(imported)} firearm(s)")
         return {"ok": True, "imported": len(imported), "log_numbers": imported}
+    except SaveRejected as e:
+        conn.rollback()
+        log(f"import_csv_commit rejected: {e}")
+        return {"ok": False, "error": str(e)}
     except Exception as e:
         conn.rollback()
         log(f"import_csv_commit failed: {e}")

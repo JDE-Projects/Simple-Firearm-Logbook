@@ -26,6 +26,7 @@ class AppDescription:
     update_link: str
     api_class: type = Api
     open_database: Callable = open_db
+    schema_version: int = config.SCHEMA_VERSION
     extension_script: str | None = None
     extension_stylesheet: str | None = None
 
@@ -79,7 +80,9 @@ def run(description: AppDescription | None = None) -> None:
     api = description.api_class()
     api.set_app_description(description)
     try:
-        conn = description.open_database(os.path.join(folder, config.DB_FILENAME))
+        conn = description.open_database(
+            os.path.join(folder, config.DB_FILENAME), description.schema_version
+        )
     except NewerSchemaError:
         platform_win._show_newer_schema_error(description.product_name)
         sys.exit(1)

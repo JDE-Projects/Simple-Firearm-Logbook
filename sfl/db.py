@@ -11,6 +11,10 @@ class NewerSchemaError(Exception):
     case; the caller should tell the user to update the app."""
 
 
+class SaveRejected(Exception):
+    """Raised by an embedding app to refuse a pending firearm save."""
+
+
 def _ensure_column(conn, table: str, column: str, decl: str) -> None:
     """Add a column to an existing table only if it isn't already there.
     Additive-only: never rewrites or drops. Safe to call on every open."""
@@ -19,19 +23,19 @@ def _ensure_column(conn, table: str, column: str, decl: str) -> None:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
 
 
-def open_db(path: str) -> sqlite3.Connection:
+def open_db(path: str, schema_version=SCHEMA_VERSION) -> sqlite3.Connection:
     """Open (creating if missing) the SQLite database and ensure the schema.
-    Refuses to touch a database stamped with a schema newer than this build
-    understands; see NewerSchemaError."""
+    Refuses to touch a database stamped with a schema newer than the caller
+    supports; see NewerSchemaError."""
     conn = sqlite3.connect(path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
 
     existing_version = conn.execute("PRAGMA user_version").fetchone()[0]
-    if existing_version > SCHEMA_VERSION:
+    if existing_version > schema_version:
         conn.close()
         raise NewerSchemaError(
-            f"Database schema {existing_version} is newer than this app supports ({SCHEMA_VERSION})."
+            f"Database schema {existing_version} is newer than this app supports ({schema_version})."
         )
 
     conn.executescript(
@@ -103,7 +107,8 @@ def open_db(path: str) -> sqlite3.Connection:
     _ensure_column(conn, "firearms", "nfa_form_type", "TEXT NOT NULL DEFAULT ''")
     _ensure_column(conn, "firearms", "nfa_stamp_date", "TEXT NOT NULL DEFAULT ''")
 
-    conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+    if existing_version < SCHEMA_VERSION:
+        conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.commit()
     return conn
 
@@ -111,8 +116,7 @@ def open_db(path: str) -> sqlite3.Connection:
 def _get_next_log_number(cur) -> str:
     """Return the next log number, zero-padded to 5 digits, and advance the
     counter. Numbers are simple sequential. The counter bump and the insert
-    share one transaction, so a rolled-back insert reuses the number. True
-    retired-number permanence is a Pro C&R bound-book feature, not free core."""
+    share one transaction, so a rolled-back insert reuses the number."""
     row = cur.execute("SELECT next_log_number FROM counters WHERE id=1").fetchone()
     n = row["next_log_number"]
     cur.execute("UPDATE counters SET next_log_number=? WHERE id=1", (n + 1,))

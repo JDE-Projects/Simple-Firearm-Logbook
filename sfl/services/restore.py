@@ -19,7 +19,7 @@ from sfl import config, paths
 from sfl.utils import sha256_hex
 
 
-def restore_pick(window, log):
+def restore_pick(window, log, schema_version=config.SCHEMA_VERSION):
     """Stage 1: native Open dialog restricted to .zip. Extraction and
     validation happen in inspect_backup; this just picks the file and hands
     off a fresh staging folder. Returns inspect_backup's preview dict, which
@@ -34,7 +34,7 @@ def restore_pick(window, log):
         if not path:
             return {"ok": True, "cancelled": True}
         staging_dir = tempfile.mkdtemp(prefix="sfl_restore_")
-        outcome = inspect_backup(path, staging_dir, log)
+        outcome = inspect_backup(path, staging_dir, log, schema_version)
         if not outcome.get("ok"):
             _cleanup_path(staging_dir, log)
         return outcome
@@ -43,7 +43,7 @@ def restore_pick(window, log):
         return {"ok": False, "error": "Couldn't read that backup file."}
 
 
-def inspect_backup(zip_path, staging_dir, log):
+def inspect_backup(zip_path, staging_dir, log, schema_version=config.SCHEMA_VERSION):
     """Stage 2: extracts zip_path into staging_dir (guarding against zip
     path traversal by resolving every member's real path before trusting
     it), reads manifest.json, and checks every inventory entry's hash. The
@@ -73,7 +73,7 @@ def inspect_backup(zip_path, staging_dir, log):
             return {"ok": False, "error": "That backup file is missing its manifest."}
 
         format_version = manifest.get("format_version", 0)
-        schema_version = manifest.get("schema_version", 0)
+        backup_schema_version = manifest.get("schema_version", 0)
         counts = manifest.get("counts", {})
         missing = manifest.get("missing", [])
         inventory = manifest.get("inventory", [])
@@ -83,10 +83,7 @@ def inspect_backup(zip_path, staging_dir, log):
         newer_msg = "This backup was made by a newer version of the app. Update the app to restore it."
         blocked = False
         block_reason = ""
-        if format_version > 1:
-            blocked = True
-            block_reason = newer_msg
-        elif schema_version > config.SCHEMA_VERSION:
+        if format_version > 1 or backup_schema_version > schema_version:
             blocked = True
             block_reason = newer_msg
 
@@ -147,7 +144,7 @@ def inspect_backup(zip_path, staging_dir, log):
                         db_version = test_conn.execute("PRAGMA user_version").fetchone()[0]
                     finally:
                         test_conn.close()
-                    if db_version > config.SCHEMA_VERSION:
+                    if db_version > schema_version:
                         blocked = True
                         block_reason = newer_msg
                 except sqlite3.DatabaseError as e:
