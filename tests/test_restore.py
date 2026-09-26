@@ -18,11 +18,14 @@ import sqlite3
 import zipfile
 from pathlib import Path
 
+import pytest
+
 import sfl.services.restore as restore_mod
 import simple_firearm_logbook as app
 from sfl import config, paths
 from sfl.services.backup import _write_backup_zip
 from sfl.services.restore import inspect_backup, restore_commit
+from sfl.utils import sha256_hex
 
 
 def _make_file(path, content=b"hello world"):
@@ -139,6 +142,74 @@ def test_newer_schema_version_blocks(tmp_path, monkeypatch):
     assert preview["ok"], preview
     assert preview["blocked"] is True
     assert preview["block_reason"]
+
+
+@pytest.mark.parametrize("manifest_schema_version", [config.SCHEMA_VERSION, config.SCHEMA_VERSION + 1])
+def test_pro_backup_newer_schema_has_pro_block_reason(tmp_path, monkeypatch, manifest_schema_version):
+    source_dir = tmp_path / "source"
+    dest_zip = tmp_path / "backup.zip"
+    source_dir.mkdir()
+    _build_backup(tmp_path, monkeypatch, source_dir, dest_zip)
+
+    def stamp_pro(entries):
+        db_path = tmp_path / "staged.db"
+        db_path.write_bytes(entries[config.DB_FILENAME])
+        conn = sqlite3.connect(db_path)
+        conn.execute("PRAGMA user_version = 2")
+        conn.execute(f"PRAGMA application_id = {config.PRO_APPLICATION_ID}")
+        conn.commit()
+        conn.close()
+        entries[config.DB_FILENAME] = db_path.read_bytes()
+        manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+        manifest["schema_version"] = manifest_schema_version
+        for item in manifest["inventory"]:
+            if item["path"] == config.DB_FILENAME:
+                item["size"] = len(entries[config.DB_FILENAME])
+                item["sha256"] = sha256_hex(entries[config.DB_FILENAME])
+        entries["manifest.json"] = json.dumps(manifest).encode("utf-8")
+
+    _rewrite_zip(dest_zip, stamp_pro)
+
+    _, log = _log_collector()
+    preview = inspect_backup(str(dest_zip), str(tmp_path / "staging"), log)
+
+    assert preview["blocked"] is True
+    assert preview["block_reason"] == (
+        "This backup was made by Simple Firearm Logbook Pro. Restore it in "
+        "Simple Firearm Logbook Pro."
+    )
+
+
+def test_plain_newer_backup_keeps_existing_block_reason(tmp_path, monkeypatch):
+    source_dir = tmp_path / "source"
+    dest_zip = tmp_path / "backup.zip"
+    source_dir.mkdir()
+    _build_backup(tmp_path, monkeypatch, source_dir, dest_zip)
+
+    def bump_schema(entries):
+        db_path = tmp_path / "staged.db"
+        db_path.write_bytes(entries[config.DB_FILENAME])
+        conn = sqlite3.connect(db_path)
+        conn.execute("PRAGMA user_version = 2")
+        conn.commit()
+        conn.close()
+        entries[config.DB_FILENAME] = db_path.read_bytes()
+        manifest = json.loads(entries["manifest.json"].decode("utf-8"))
+        for item in manifest["inventory"]:
+            if item["path"] == config.DB_FILENAME:
+                item["size"] = len(entries[config.DB_FILENAME])
+                item["sha256"] = sha256_hex(entries[config.DB_FILENAME])
+        entries["manifest.json"] = json.dumps(manifest).encode("utf-8")
+
+    _rewrite_zip(dest_zip, bump_schema)
+
+    _, log = _log_collector()
+    preview = inspect_backup(str(dest_zip), str(tmp_path / "staging"), log)
+
+    assert preview["blocked"] is True
+    assert preview["block_reason"] == (
+        "This backup was made by a newer version of the app. Update the app to restore it."
+    )
 
 
 def test_schema_version_is_checked_against_the_supplied_version(tmp_path, monkeypatch):

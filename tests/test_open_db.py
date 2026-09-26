@@ -13,6 +13,7 @@ import sqlite3
 import pytest
 
 import simple_firearm_logbook as app
+from sfl import config
 
 
 # ─────────────────────────────────────────────────────────────
@@ -195,3 +196,25 @@ def test_newer_schema_database_is_left_untouched(tmp_path):
         assert tables == set()
     finally:
         check.close()
+
+
+@pytest.mark.parametrize("application_id, opened_by_pro", [
+    (config.PRO_APPLICATION_ID, True),
+    (0, False),
+])
+def test_newer_schema_error_reports_pro_stamp_without_changing_database(
+    tmp_path, application_id, opened_by_pro
+):
+    db_path = tmp_path / "newer.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute(f"PRAGMA user_version = {app.SCHEMA_VERSION + 1}")
+    conn.execute(f"PRAGMA application_id = {application_id}")
+    conn.commit()
+    conn.close()
+    before = db_path.read_bytes()
+
+    with pytest.raises(app.NewerSchemaError) as raised:
+        app.open_db(str(db_path))
+
+    assert raised.value.opened_by_pro is opened_by_pro
+    assert db_path.read_bytes() == before

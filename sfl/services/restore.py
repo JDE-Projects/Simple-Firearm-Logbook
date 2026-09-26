@@ -81,9 +81,10 @@ def inspect_backup(zip_path, staging_dir, log, schema_version=config.SCHEMA_VERS
         app_version = manifest.get("app_version", "")
 
         newer_msg = "This backup was made by a newer version of the app. Update the app to restore it."
+        newer_schema_blocked = backup_schema_version > schema_version
         blocked = False
         block_reason = ""
-        if format_version > 1 or backup_schema_version > schema_version:
+        if format_version > 1 or newer_schema_blocked:
             blocked = True
             block_reason = newer_msg
 
@@ -136,26 +137,40 @@ def inspect_backup(zip_path, staging_dir, log, schema_version=config.SCHEMA_VERS
         # The database hash matched (or there was no hash to check against);
         # confirm it actually opens as SQLite and isn't stamped with a schema
         # this build doesn't understand, same policy as db.open_db.
-        if not blocked and integrity_ok:
+        pro_database = False
+        if integrity_ok and os.path.isfile(db_full):
             if _sqlite_opens_cleanly(db_full, log, "inspect_backup"):
                 try:
                     test_conn = sqlite3.connect(db_full)
                     try:
                         db_version = test_conn.execute("PRAGMA user_version").fetchone()[0]
+                        pro_database = (
+                            test_conn.execute("PRAGMA application_id").fetchone()[0]
+                            == config.PRO_APPLICATION_ID
+                        )
                     finally:
                         test_conn.close()
                     if db_version > schema_version:
+                        newer_schema_blocked = True
                         blocked = True
                         block_reason = newer_msg
                 except sqlite3.DatabaseError as e:
                     log(f"inspect_backup: staged database won't open: {e}")
                     integrity_ok = False
-                    blocked = True
-                    block_reason = "The backup's database file is missing or damaged. It can't be restored."
+                    if not blocked:
+                        blocked = True
+                        block_reason = "The backup's database file is missing or damaged. It can't be restored."
             else:
                 integrity_ok = False
-                blocked = True
-                block_reason = "The backup's database file is missing or damaged. It can't be restored."
+                if not blocked:
+                    blocked = True
+                    block_reason = "The backup's database file is missing or damaged. It can't be restored."
+
+        if newer_schema_blocked and pro_database:
+            block_reason = (
+                "This backup was made by Simple Firearm Logbook Pro. Restore it in "
+                "Simple Firearm Logbook Pro."
+            )
 
         log(
             f"Restore preview: {zip_path}, blocked={blocked}, "

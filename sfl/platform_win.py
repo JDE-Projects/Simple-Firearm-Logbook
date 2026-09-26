@@ -152,11 +152,17 @@ def _show_write_error(folder: str, product_name: str = "Simple Firearm Logbook")
         pass
 
 
-def _show_newer_schema_error(product_name: str = "Simple Firearm Logbook"):
-    msg = (
-        f"This data file was created by a newer version of {product_name} than this one.\n\n"
-        "Update to the latest version of the app to open it."
-    )
+def _show_newer_schema_error(product_name: str = "Simple Firearm Logbook", opened_by_pro=False):
+    if opened_by_pro:
+        msg = (
+            "This logbook has been opened in Simple Firearm Logbook Pro, which saves it in a "
+            "format this app can't read.\n\nOpen it in Simple Firearm Logbook Pro."
+        )
+    else:
+        msg = (
+            f"This data file was created by a newer version of {product_name} than this one.\n\n"
+            "Update to the latest version of the app to open it."
+        )
     try:
         ctypes.windll.user32.MessageBoxW(0, msg, product_name, 0x10)  # MB_ICONERROR
     except Exception:

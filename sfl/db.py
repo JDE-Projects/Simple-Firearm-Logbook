@@ -2,13 +2,17 @@
 helpers shared by every service that reads a firearms row."""
 import sqlite3
 
-from sfl.config import SCHEMA_VERSION
+from sfl.config import PRO_APPLICATION_ID, SCHEMA_VERSION
 
 
 class NewerSchemaError(Exception):
     """Raised by open_db when the database's PRAGMA user_version is higher
     than this build's SCHEMA_VERSION. The database is never touched in this
     case; the caller should tell the user to update the app."""
+
+    def __init__(self, message="", opened_by_pro=False):
+        super().__init__(message)
+        self.opened_by_pro = opened_by_pro
 
 
 class SaveRejected(Exception):
@@ -33,9 +37,11 @@ def open_db(path: str, schema_version=SCHEMA_VERSION) -> sqlite3.Connection:
 
     existing_version = conn.execute("PRAGMA user_version").fetchone()[0]
     if existing_version > schema_version:
+        application_id = conn.execute("PRAGMA application_id").fetchone()[0]
         conn.close()
         raise NewerSchemaError(
-            f"Database schema {existing_version} is newer than this app supports ({schema_version})."
+            f"Database schema {existing_version} is newer than this app supports ({schema_version}).",
+            opened_by_pro=application_id == PRO_APPLICATION_ID,
         )
 
     conn.executescript(

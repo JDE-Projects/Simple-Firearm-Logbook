@@ -10,6 +10,8 @@ DB_FILENAME = "simple_firearm_logbook.db"
 PHOTOS_DIRNAME = "photos"
 ATTACHMENTS_DIRNAME = "attachments"
 SCHEMA_VERSION = 1
+# The SQLite application_id Simple Firearm Logbook Pro stamps on logbooks it opens.
+PRO_APPLICATION_ID = 0x53464C50
 
 DISPOSITION_STATUSES = ("Owned", "Sold", "Traded", "Lost", "Stolen", "Other")
 STANDARD_FIREARM_TYPES = ("Pistol", "Revolver", "Rifle", "Shotgun", "Other")

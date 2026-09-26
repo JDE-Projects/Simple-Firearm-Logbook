@@ -113,16 +113,61 @@ def test_run_reports_newer_schema_from_custom_database_opener(monkeypatch, tmp_p
         update_owner="example-owner",
         update_repo="example-repo",
         update_link="https://example.invalid/update",
-        open_database=lambda path, schema_version: (_ for _ in ()).throw(NewerSchemaError()),
+        open_database=lambda path, schema_version: (_ for _ in ()).throw(
+            NewerSchemaError(opened_by_pro=True)
+        ),
     )
     calls = []
     monkeypatch.setattr(launcher, "app_dir", lambda: str(tmp_path))
     monkeypatch.setattr(launcher.platform_win, "_acquire_single_instance", lambda name: True)
     monkeypatch.setattr(launcher.platform_win, "_writable_check", lambda folder: True)
-    monkeypatch.setattr(launcher.platform_win, "_show_newer_schema_error", lambda name: calls.append(name))
+    monkeypatch.setattr(
+        launcher.platform_win,
+        "_show_newer_schema_error",
+        lambda name, opened_by_pro: calls.append((name, opened_by_pro)),
+    )
 
     with pytest.raises(SystemExit) as exited:
         launcher.run(description)
 
     assert exited.value.code == 1
-    assert calls == ["Embedding Logbook"]
+    assert calls == [("Embedding Logbook", True)]
+
+
+@pytest.mark.parametrize(
+    ("opened_by_pro", "expected_message"),
+    [
+        (
+            True,
+            (
+                "This logbook has been opened in Simple Firearm Logbook Pro, which saves it in a "
+                "format this app can't read.\n\nOpen it in Simple Firearm Logbook Pro."
+            ),
+        ),
+        (
+            False,
+            (
+                "This data file was created by a newer version of Example Logbook than this one.\n\n"
+                "Update to the latest version of the app to open it."
+            ),
+        ),
+    ],
+)
+def test_newer_schema_error_message(monkeypatch, opened_by_pro, expected_message):
+    calls = []
+
+    class User32:
+        @staticmethod
+        def MessageBoxW(*args):
+            calls.append(args)
+
+    monkeypatch.setattr(
+        launcher.platform_win.ctypes,
+        "windll",
+        type("Windll", (), {"user32": User32()})(),
+        raising=False,
+    )
+
+    launcher.platform_win._show_newer_schema_error("Example Logbook", opened_by_pro)
+
+    assert calls == [(0, expected_message, "Example Logbook", 0x10)]

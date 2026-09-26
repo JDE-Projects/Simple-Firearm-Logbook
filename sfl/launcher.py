@@ -84,8 +84,8 @@ def run(description: AppDescription | None = None) -> None:
         conn = description.open_database(
             os.path.join(folder, config.DB_FILENAME), description.schema_version
         )
-    except NewerSchemaError:
-        platform_win._show_newer_schema_error(description.product_name)
+    except NewerSchemaError as error:
+        platform_win._show_newer_schema_error(description.product_name, error.opened_by_pro)
         sys.exit(1)
 
     api.set_conn(conn)
