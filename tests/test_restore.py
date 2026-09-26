@@ -183,7 +183,7 @@ def test_api_uses_description_schema_version_and_opener(tmp_path, monkeypatch):
     api._restore_staging = str(tmp_path / "staging")
     monkeypatch.setattr(restore_mod, "restore_commit", lambda staging, log: {"ok": True})
     monkeypatch.setattr(paths, "app_dir", lambda: str(tmp_path))
-    assert api.restore_commit()["ok"]
+    assert api.restore_commit(extension_data={"ignored": True})["ok"]
     assert calls["opened"] == (os.path.join(str(tmp_path), config.DB_FILENAME), 7)
     api.close_conn()
 

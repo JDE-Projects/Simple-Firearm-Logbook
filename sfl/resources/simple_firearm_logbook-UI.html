@@ -110,6 +110,13 @@ button.btn.small { padding:6px 10px; font-size:12px; }
 }
 .toolbar-left { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
 .toolbar-right { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+/* Filters get their own full-width row under the search and buttons, so
+   added filter toggles never push the buttons onto a second line. */
+.toolbar-filters { order:3; flex-basis:100%; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.toolbar-filters .filter-divider { width:1px; height:18px; background:var(--border-2); }
+#extensionFilterToggles { display:contents; }
+#toolbarSlot:empty, #detailSlot:empty, #firearmFormSlot:empty, #dispositionSlot:empty,
+#markOwnedSlot:empty, #deleteFirearmSlot:empty, #restoreSlot:empty { display:none; }
 .toolbar-search { position:relative; display:flex; align-items:center; }
 .toolbar-search input {
   font-family:"Sora", sans-serif; font-size:12.5px; color:var(--text); width:340px;
@@ -405,23 +412,38 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg>
           </button>
         </div>
+      </div>
+      <div class="toolbar-filters">
         <label class="show-disposed-toggle">
           <input type="checkbox" id="showDisposedToggle" onchange="onShowDisposedChange()">
           <span class="sd-track"></span>
           <span>Show disposed firearms</span>
         </label>
+        <span class="filter-divider"></span>
         <label class="show-disposed-toggle">
-          <input type="checkbox" id="trustFilterToggle" onchange="onTrustFilterChange()">
+          <input type="checkbox" id="allFilterToggle" checked onchange="onGroupFilterChange('all', this.checked)">
           <span class="sd-track"></span>
-          <span>Trust only</span>
+          <span>All</span>
         </label>
         <label class="show-disposed-toggle">
-          <input type="checkbox" id="nfaFilterToggle" onchange="onNfaFilterChange()">
+          <input type="checkbox" id="generalFilterToggle" onchange="onGroupFilterChange('general', this.checked)">
           <span class="sd-track"></span>
-          <span>NFA only</span>
+          <span>General</span>
         </label>
+        <label class="show-disposed-toggle">
+          <input type="checkbox" id="nfaFilterToggle" onchange="onGroupFilterChange('nfa', this.checked)">
+          <span class="sd-track"></span>
+          <span>NFA</span>
+        </label>
+        <label class="show-disposed-toggle">
+          <input type="checkbox" id="trustFilterToggle" onchange="onGroupFilterChange('trust', this.checked)">
+          <span class="sd-track"></span>
+          <span>Trust</span>
+        </label>
+        <span id="extensionFilterToggles"></span>
       </div>
       <div class="toolbar-right">
+        <div id="toolbarSlot"></div>
         <button type="button" class="btn" onclick="runBackup()">Backup</button>
         <button type="button" class="btn" onclick="openRestoreModal()">Restore</button>
         <button type="button" class="btn" onclick="openImportModal()">Import</button>
@@ -487,6 +509,7 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
         </div>
         <div class="detail-grid" id="dispositionGrid"></div>
       </div>
+      <div id="detailSlot"></div>
 
       <div class="detail-panel">
         <div class="gallery-head">
@@ -647,6 +670,7 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
           <textarea id="ff-notes"></textarea>
         </div>
       </div>
+      <div id="firearmFormSlot"></div>
       <div class="err" id="ff-err"></div>
       <div class="m-foot">
         <button class="btn" onclick="closeFirearmModal()">Cancel</button>
@@ -695,6 +719,7 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
           <textarea id="dp-notes"></textarea>
         </div>
       </div>
+      <div id="dispositionSlot"></div>
       <div class="err" id="dp-err"></div>
       <div class="m-foot">
         <button class="btn" onclick="closeDispositionModal()">Cancel</button>
@@ -712,6 +737,7 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
         <input type="checkbox" id="delExportFirst" checked>
         <label for="delExportFirst">Export backup first</label>
       </div>
+      <div id="deleteFirearmSlot"></div>
       <div class="err" id="del-firearm-err"></div>
       <div class="m-foot">
         <button class="btn" onclick="closeDeleteFirearmModal()">Cancel</button>
@@ -725,6 +751,8 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
     <div class="modal">
       <h3>Mark as owned again?</h3>
       <div class="m-msg">This clears the disposition record (status, date, to, address, amount, and notes) and returns the firearm to your owned list.</div>
+      <div id="markOwnedSlot"></div>
+      <div class="err" id="mark-owned-err"></div>
       <div class="m-foot">
         <button class="btn" onclick="closeMarkOwnedModal()">Cancel</button>
         <button class="btn primary" onclick="confirmMarkOwned()">Mark as owned</button>
@@ -891,6 +919,7 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
         <div class="export-note" id="restoreBlockedNote" style="display:none;"></div>
         <div class="export-note" id="restoreIncompleteNote" style="display:none;"></div>
         <div class="export-note" id="restoreIntegrityNote" style="display:none;"></div>
+        <div id="restoreSlot"></div>
       </div>
 
       <div class="export-note" id="restore-done-note" style="display:none;"></div>
@@ -983,8 +1012,12 @@ const FIREARM_TYPES = ["Pistol","Revolver","Rifle","Shotgun","Receiver","Frame",
 const SUBTYPES = ["Bolt","Lever","Pump","Semi-auto","Automatic","Break","Single-shot","Muzzleloader"];
 let currentSearch = "";
 let showDisposed = false;
-let showTrustOnly = false;
-let showNfaOnly = false;
+const activeGroups = new Set();
+const extensionFilters = [];
+const extensionBadges = [];
+const dialogHooks = Object.create(null);
+const reportedFilterErrors = new Set();
+const reportedBadgeErrors = new WeakSet();
 const extensionHandlers = {
   started: [],
   recordChanged: [],
@@ -1028,6 +1061,11 @@ function emitExtensionEvent(name, detail){
 
 window.SFL = {
   root: $("extension-root"),
+  slots: {
+    toolbar: $("toolbarSlot"), detail: $("detailSlot"), firearmForm: $("firearmFormSlot"),
+    disposition: $("dispositionSlot"), markOwned: $("markOwnedSlot"),
+    deleteFirearm: $("deleteFirearmSlot"), restore: $("restoreSlot"),
+  },
   on(eventName, handler){
     if (!Object.prototype.hasOwnProperty.call(extensionHandlers, eventName)) {
       throw new Error('Unknown extension event "' + eventName + '". Valid events: started, recordChanged, viewChanged.');
@@ -1037,7 +1075,67 @@ window.SFL = {
   reportError(message){
     reportExtensionError(message);
   },
+  refreshList(){ renderTable(); },
+  addFilter(filter){
+    if (!filter || typeof filter.key !== "string" || !filter.key || typeof filter.label !== "string" || typeof filter.match !== "function") throw new Error("A filter needs a key, label, and match function.");
+    if (extensionFilters.some(existing => existing.key === filter.key)) throw new Error('An extension filter with key "' + filter.key + '" is already registered.');
+    extensionFilters.push(filter);
+    const label = document.createElement("label");
+    label.className = "show-disposed-toggle";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.dataset.groupKey = filter.key;
+    input.onchange = () => onGroupFilterChange(filter.key, input.checked);
+    const track = document.createElement("span");
+    track.className = "sd-track";
+    const text = document.createElement("span");
+    text.textContent = filter.label;
+    label.append(input, track, text);
+    $("extensionFilterToggles").appendChild(label);
+  },
+  addBadge(fn){
+    if (typeof fn !== "function") throw new Error("A badge must be a function.");
+    extensionBadges.push(fn);
+  },
+  onDialog(name, hooks){
+    if (!["firearmForm", "disposition", "markOwned", "deleteFirearm", "restore"].includes(name)) throw new Error('Unknown dialog "' + name + '".');
+    if (dialogHooks[name]) throw new Error('A dialog hook for "' + name + '" is already registered.');
+    if (!hooks || typeof hooks !== "object" || ["open", "collect", "done"].some(key => hooks[key] !== undefined && typeof hooks[key] !== "function")) throw new Error("Dialog hooks must be functions.");
+    dialogHooks[name] = hooks;
+  },
 };
+async function openDialogHook(name, context){
+  const hook = dialogHooks[name];
+  if (!hook || !hook.open) return;
+  try { await hook.open(context); }
+  catch (error) { reportExtensionError(extensionErrorMessage(error)); }
+}
+async function collectDialogHook(name, context, errEl){
+  const hook = dialogHooks[name];
+  if (!hook || !hook.collect) return {proceed:true, data:undefined};
+  try {
+    const result = await hook.collect(context);
+    if (result && result.ok === true) return {proceed:true, data:result.data};
+    if (result && result.ok === false) {
+      errEl.textContent = result.error == null ? "" : String(result.error);
+      return {proceed:false};
+    }
+    throw new Error("Dialog collect must return an ok result.");
+  } catch (error) {
+    reportExtensionError(extensionErrorMessage(error));
+    errEl.textContent = "Couldn't save: an extension problem stopped it.";
+    return {proceed:false};
+  }
+}
+async function doneDialogHook(name, result, context){
+  const hook = dialogHooks[name];
+  if (!hook || !hook.done) return;
+  try { await hook.done(result, context); }
+  catch (error) { reportExtensionError(extensionErrorMessage(error)); }
+}
+function callWithExtensionData(method, args, data){
+  return data === undefined ? method(...args) : method(...args, data);
+}
 let sortCol = "log_number";
 let sortDir = "asc";
 let currentFirearm = null;
@@ -1113,11 +1211,13 @@ function visibleFirearms(){
   if (!showDisposed){
     rows = rows.filter(f => f.disposition_status === "Owned");
   }
-  if (showTrustOnly){
-    rows = rows.filter(f => f.held_in_trust);
-  }
-  if (showNfaOnly){
-    rows = rows.filter(f => f.is_nfa);
+  if (activeGroups.size){
+    rows = rows.filter(f => {
+      const matchedExtensions = extensionFilters.filter(filter => matchesExtensionFilter(filter, f));
+      return (activeGroups.has("nfa") && !!f.is_nfa) || (activeGroups.has("trust") && !!f.held_in_trust) ||
+        (activeGroups.has("general") && !f.is_nfa && !f.held_in_trust && !matchedExtensions.length) ||
+        matchedExtensions.some(filter => activeGroups.has(filter.key));
+    });
   }
   const q = currentSearch.trim().toLowerCase();
   if (q){
@@ -1181,6 +1281,7 @@ function renderTable(){
     let badge = disposed ? `<span class="status-badge ${statusClass(f.disposition_status)}">${esc(f.disposition_status)}</span>` : "";
     if (f.held_in_trust) badge += ` <span class="status-badge badge-trust">Trust</span>`;
     if (f.is_nfa) badge += ` <span class="status-badge badge-nfa">NFA</span>`;
+    badge += extensionBadgeHtml(f);
     const docMissingText = f.attachment_missing > 0 ? ` (${f.attachment_missing} missing)` : "";
     const docBadge = f.attachment_count
       ? `<span class="doc-badge${f.attachment_missing > 0 ? " is-missing" : ""}" title="${esc(formatSize(f.attachment_bytes))}${f.attachment_missing > 0 ? `, ${f.attachment_missing} missing` : ""}">${f.attachment_count} doc${f.attachment_count === 1 ? "" : "s"}${docMissingText}</span>`
@@ -1213,12 +1314,42 @@ function onShowDisposedChange(){
   showDisposed = $("showDisposedToggle").checked;
   renderTable();
 }
-function onTrustFilterChange(){
-  showTrustOnly = $("trustFilterToggle").checked;
-  renderTable();
+function matchesExtensionFilter(filter, firearm){
+  try { return !!filter.match(firearm); }
+  catch (error) {
+    if (!reportedFilterErrors.has(filter.key)) {
+      reportedFilterErrors.add(filter.key);
+      reportExtensionError(extensionErrorMessage(error));
+    }
+    return false;
+  }
 }
-function onNfaFilterChange(){
-  showNfaOnly = $("nfaFilterToggle").checked;
+function extensionBadgeHtml(firearm){
+  let html = "";
+  extensionBadges.forEach(fn => {
+    try {
+      const badges = fn(firearm);
+      if (!Array.isArray(badges)) return;
+      badges.forEach(badge => {
+        if (!badge || typeof badge.className !== "string" || !/^[A-Za-z0-9-]+$/.test(badge.className)) return;
+        html += ` <span class="status-badge ${badge.className}">${esc(badge.text == null ? "" : badge.text)}</span>`;
+      });
+    } catch (error) {
+      if (!reportedBadgeErrors.has(fn)) {
+        reportedBadgeErrors.add(fn);
+        reportExtensionError(extensionErrorMessage(error));
+      }
+    }
+  });
+  return html;
+}
+function onGroupFilterChange(key, checked){
+  if (key === "all") activeGroups.clear();
+  else if (checked) activeGroups.add(key);
+  else activeGroups.delete(key);
+  $("allFilterToggle").checked = activeGroups.size === 0;
+  ["general", "nfa", "trust"].forEach(group => $(group + "FilterToggle").checked = activeGroups.has(group));
+  document.querySelectorAll("#extensionFilterToggles input[data-group-key]").forEach(input => input.checked = activeGroups.has(input.dataset.groupKey));
   renderTable();
 }
 
@@ -1233,7 +1364,7 @@ async function showListView(){
 }
 
 /* ---------- add / edit firearm modal ---------- */
-function openAddFirearmModal(){
+async function openAddFirearmModal(){
   editingFirearmId = null;
   $("firearmModalTitle").textContent = "Add firearm";
   ["ff-make","ff-model","ff-serial","ff-type","ff-caliber","ff-acq-date","ff-acq-from","ff-price","ff-value","ff-insured","ff-storage","ff-notes",
@@ -1247,10 +1378,11 @@ function openAddFirearmModal(){
   onNfaChange();
   $("ff-err").textContent = "";
   loadAutocomplete();
+  await openDialogHook("firearmForm", {mode:"add", firearm:null});
   $("firearmModalScrim").classList.add("open");
   setTimeout(() => $("ff-make").focus(), 50);
 }
-function openEditFirearmModal(){
+async function openEditFirearmModal(){
   if (!currentFirearm) return;
   editingFirearmId = currentFirearm.id;
   $("firearmModalTitle").textContent = "Edit firearm";
@@ -1292,6 +1424,7 @@ function openEditFirearmModal(){
   onNfaChange();
   $("ff-err").textContent = "";
   loadAutocomplete();
+  await openDialogHook("firearmForm", {mode:"edit", firearm:currentFirearm});
   $("firearmModalScrim").classList.add("open");
 }
 function closeFirearmModal(){
@@ -1325,12 +1458,16 @@ async function saveFirearm(){
     effectiveSubtype, $("ff-trust").checked ? 1 : 0, $("ff-trust-name").value,
     $("ff-nfa").checked ? 1 : 0, $("ff-nfa-form").value, $("ff-nfa-date").value,
   ];
+  const context = {mode:editingFirearmId ? "edit" : "add", firearm:editingFirearmId ? currentFirearm : null};
+  const collected = await collectDialogHook("firearmForm", context, errEl);
+  if (!collected.proceed) return;
   let r;
   if (editingFirearmId){
-    r = await api().update_firearm(editingFirearmId, ...fields);
+    r = await callWithExtensionData(api().update_firearm.bind(api()), [editingFirearmId, ...fields], collected.data);
   } else {
-    r = await api().create_firearm(...fields);
+    r = await callWithExtensionData(api().create_firearm.bind(api()), fields, collected.data);
   }
+  await doneDialogHook("firearmForm", r, context);
   if (!r || !r.ok){
     errEl.textContent = (r && r.error) || "Something went wrong.";
     return;
@@ -1433,7 +1570,7 @@ function onDispositionStatusChange(){
   const owned = $("dp-status").value === "Owned";
   $("dp-extra-fields").style.display = owned ? "none" : "block";
 }
-function openDispositionModal(){
+async function openDispositionModal(){
   if (!currentFirearm) return;
   const f = currentFirearm;
   $("dp-status").value = f.disposition_status || "Owned";
@@ -1444,6 +1581,7 @@ function openDispositionModal(){
   $("dp-notes").value = f.disposition_notes || "";
   $("dp-err").textContent = "";
   onDispositionStatusChange();
+  await openDialogHook("disposition", {firearm:currentFirearm});
   $("dispositionModalScrim").classList.add("open");
 }
 function closeDispositionModal(){
@@ -1453,10 +1591,14 @@ async function saveDisposition(){
   if (!api() || !currentFirearm) return;
   const errEl = $("dp-err");
   errEl.textContent = "";
-  const r = await api().update_disposition(
-    currentFirearm.id, $("dp-status").value, $("dp-date").value,
-    $("dp-to").value, $("dp-address").value, $("dp-amount").value, $("dp-notes").value
-  );
+  const context = {firearm:currentFirearm};
+  const collected = await collectDialogHook("disposition", context, errEl);
+  if (!collected.proceed) return;
+  const r = await callWithExtensionData(api().update_disposition.bind(api()), [
+    currentFirearm.id, $("dp-status").value, $("dp-date").value, $("dp-to").value,
+    $("dp-address").value, $("dp-amount").value, $("dp-notes").value
+  ], collected.data);
+  await doneDialogHook("disposition", r, context);
   if (!r || !r.ok){
     errEl.textContent = (r && r.error) || "Something went wrong.";
     return;
@@ -1820,21 +1962,31 @@ async function confirmDeleteAttachment(){
 }
 
 /* ---------- mark as owned (undo disposition) ---------- */
-function openMarkOwnedModal(){
+async function openMarkOwnedModal(){
   if (!currentFirearm) return;
+  $("mark-owned-err").textContent = "";
+  await openDialogHook("markOwned", {firearm:currentFirearm});
   $("markOwnedModalScrim").classList.add("open");
 }
 function closeMarkOwnedModal(){
   $("markOwnedModalScrim").classList.remove("open");
 }
 async function confirmMarkOwned(){
-  if (!api() || !currentFirearm){ closeMarkOwnedModal(); return; }
-  const r = await api().update_disposition(currentFirearm.id, "Owned");
-  closeMarkOwnedModal();
+  if (!api() || !currentFirearm) return;
+  const errEl = $("mark-owned-err");
+  errEl.textContent = "";
+  const context = {firearm:currentFirearm};
+  const collected = await collectDialogHook("markOwned", context, errEl);
+  if (!collected.proceed) return;
+  const dispositionArgs = [currentFirearm.id, "Owned"];
+  if (collected.data !== undefined) dispositionArgs.push("", "", "", "", "");
+  const r = await callWithExtensionData(api().update_disposition.bind(api()), dispositionArgs, collected.data);
+  await doneDialogHook("markOwned", r, context);
   if (!r || !r.ok){
-    showToast((r && r.error) || "Couldn't update the disposition.");
+    errEl.textContent = (r && r.error) || "Couldn't update the disposition.";
     return;
   }
+  closeMarkOwnedModal();
   const firearmId = currentFirearm.id;
   if (await openDetail(firearmId)) {
     emitExtensionEvent("recordChanged", {id:firearmId, action:"disposition"});
@@ -1842,12 +1994,13 @@ async function confirmMarkOwned(){
 }
 
 /* ---------- delete firearm ---------- */
-function openDeleteFirearmModal(){
+async function openDeleteFirearmModal(){
   if (!currentFirearm) return;
   $("delFirearmMsg").innerHTML = `Log number <strong>${esc(currentFirearm.log_number)}</strong> will be retired forever and can never be reused.` +
     `<span class="m-detail">This deletes the firearm record and its photos. This can't be undone.</span>`;
   $("delExportFirst").checked = true;
   $("del-firearm-err").textContent = "";
+  await openDialogHook("deleteFirearm", {firearm:currentFirearm});
   $("deleteFirearmModalScrim").classList.add("open");
 }
 function closeDeleteFirearmModal(){
@@ -1858,7 +2011,11 @@ async function confirmDeleteFirearm(){
   const errEl = $("del-firearm-err");
   errEl.textContent = "";
   const exportFirst = $("delExportFirst").checked;
-  const r = await api().delete_firearm(currentFirearm.id, exportFirst);
+  const context = {firearm:currentFirearm};
+  const collected = await collectDialogHook("deleteFirearm", context, errEl);
+  if (!collected.proceed) return;
+  const r = await callWithExtensionData(api().delete_firearm.bind(api()), [currentFirearm.id, exportFirst], collected.data);
+  await doneDialogHook("deleteFirearm", r, context);
   if (!r || !r.ok){
     errEl.textContent = (r && r.error) || "Something went wrong.";
     return;
@@ -2189,10 +2346,10 @@ async function runRestorePick(){
   if (r.cancelled) return;
   RESTORE.staging = r.staging;
   RESTORE.preview = r;
-  renderRestorePreviewStep();
+  await renderRestorePreviewStep();
 }
 
-function renderRestorePreviewStep(){
+async function renderRestorePreviewStep(){
   const p = RESTORE.preview;
   $("restoreModalTitle").textContent = "Preview and confirm";
   $("restoreModalMsg").textContent = "Nothing is changed yet.";
@@ -2230,6 +2387,7 @@ function renderRestorePreviewStep(){
   $("restoreProceedBtn").style.display = "";
   $("restoreProceedBtn").disabled = !!p.blocked;
   $("restoreOkBtn").style.display = "none";
+  await openDialogHook("restore", {pick:p});
 }
 
 function runRestoreProceed(){
@@ -2255,7 +2413,11 @@ async function doRestoreCommit(){
   if (!api()) return;
   const errEl = $("restore-err");
   errEl.textContent = "";
-  const r = await api().restore_commit();
+  const context = {pick:RESTORE.preview};
+  const collected = await collectDialogHook("restore", context, errEl);
+  if (!collected.proceed) return;
+  const r = await callWithExtensionData(api().restore_commit.bind(api()), [], collected.data);
+  await doneDialogHook("restore", r, context);
   if (!r) return;
   if (!r.ok){
     errEl.textContent = r.error || "Couldn't restore the backup.";

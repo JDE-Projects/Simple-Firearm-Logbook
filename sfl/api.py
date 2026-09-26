@@ -261,7 +261,7 @@ class Api:
             self._restore_staging = result["staging"]
         return result
 
-    def restore_commit(self):
+    def restore_commit(self, extension_data=None):
         """Stage 3: replaces the live database, photos, and attachments
         with the staged backup's. The live connection is closed before the
         file swap and reopened after, on the original database if the swap
