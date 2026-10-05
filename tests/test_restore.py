@@ -537,6 +537,7 @@ def test_restore_commit_keeps_originals_when_rollback_fails_setting_aside(tmp_pa
     kept = result["kept_folder"]
     try:
         assert result["ok"] is False
+        assert Path(kept).parent == live_dir
         assert kept in result["error"]
         assert "not changed" not in result["error"].lower()
         assert "could not be fully put back" in result["error"].lower()

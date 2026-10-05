@@ -215,7 +215,7 @@ def restore_commit(staging_dir, log):
     staged_photos = os.path.join(staging_dir, config.PHOTOS_DIRNAME)
     staged_attachments = os.path.join(staging_dir, config.ATTACHMENTS_DIRNAME)
 
-    aside_dir = tempfile.mkdtemp(prefix="sfl_restore_aside_")
+    aside_dir = tempfile.mkdtemp(prefix="sfl_restore_aside_", dir=paths.app_dir())
     moved_aside = []  # (aside_path, original_path), in the order they were moved
 
     try:
