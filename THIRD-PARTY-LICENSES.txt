@@ -5395,10 +5395,6 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-<per-app packages: for each extra package this app bundles beyond the shared
-base list, add a section here in the same form (name and version heading, then
-its full license text), then delete this note>
-
 ============================================================
 Fonts - Sora and JetBrains Mono, OFL-1.1
 ============================================================
