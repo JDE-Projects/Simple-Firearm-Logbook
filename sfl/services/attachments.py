@@ -207,13 +207,21 @@ def delete_attachment(conn, log, attachment_id):
         full = paths._safe_attachment_path(row["filename"])
         conn.execute("DELETE FROM attachments WHERE id=?", (attachment_id,))
         conn.commit()
+        warning = None
         if full:
             try:
                 os.remove(full)
-            except Exception:
-                pass
+            except Exception as e:
+                log(f"Deleted attachment {attachment_id}, but couldn't remove file {full}: {e}")
+                warning = (
+                    "The document was deleted, but its file could not be removed from disk. "
+                    "See the log for details."
+                )
         log(f"Deleted attachment {attachment_id}")
-        return {"ok": True, "attachments": _get_attachments(conn, firearm_id)}
+        result = {"ok": True, "attachments": _get_attachments(conn, firearm_id)}
+        if warning:
+            result["warning"] = warning
+        return result
     except Exception as e:
         conn.rollback()
         log(f"delete_attachment failed: {e}")
