@@ -11,12 +11,19 @@ import os
 import shutil
 import sqlite3
 import tempfile
+import time
 import zipfile
 
 import webview
 
 from sfl import config, paths
 from sfl.utils import sha256_hex
+
+STAGING_PREFIX = "sfl_restore_"
+# A staging folder touched more recently than this is left alone by the
+# launch sweep: the free and Pro editions share the prefix, so another
+# running copy of the app may be showing a restore preview from it.
+STALE_STAGING_SECONDS = 60 * 60
 
 
 def restore_pick(window, log, schema_version=config.SCHEMA_VERSION):
@@ -33,7 +40,7 @@ def restore_pick(window, log, schema_version=config.SCHEMA_VERSION):
         path = result[0] if isinstance(result, (list, tuple)) else result
         if not path:
             return {"ok": True, "cancelled": True}
-        staging_dir = tempfile.mkdtemp(prefix="sfl_restore_")
+        staging_dir = tempfile.mkdtemp(prefix=STAGING_PREFIX)
         outcome = inspect_backup(path, staging_dir, log, schema_version)
         if not outcome.get("ok"):
             _cleanup_path(staging_dir, log)
@@ -323,6 +330,40 @@ def _rollback(moved_aside, log):
             log(f"restore_commit: rollback failed for {original}: {e}")
             complete = False
     return complete
+
+
+def discard_staging(staging_dir, log):
+    """Deletes a staged backup that will not be restored. A failure is
+    logged, and the launch sweep retries the folder on a later start."""
+    _cleanup_path(staging_dir, log)
+
+
+def sweep_stale_staging(log, temp_dir=None, now=None):
+    """Deletes restore staging folders left in the temp folder by an app
+    that never cleared them (a crash, or Windows ending the process).
+    Only folders named with STAGING_PREFIX are touched, never links, and
+    never one modified within STALE_STAGING_SECONDS."""
+    temp_dir = temp_dir or tempfile.gettempdir()
+    now = time.time() if now is None else now
+    try:
+        entries = list(os.scandir(temp_dir))
+    except OSError as e:
+        log(f"restore: couldn't scan {temp_dir} for leftover restore folders: {e}")
+        return
+    for entry in entries:
+        if not entry.name.startswith(STAGING_PREFIX):
+            continue
+        try:
+            if entry.is_symlink() or getattr(entry, "is_junction", lambda: False)():
+                continue
+            if not entry.is_dir(follow_symlinks=False):
+                continue
+            if now - entry.stat(follow_symlinks=False).st_mtime < STALE_STAGING_SECONDS:
+                continue
+        except OSError as e:
+            log(f"restore: couldn't check leftover restore folder {entry.path}: {e}")
+            continue
+        _cleanup_path(entry.path, log)
 
 
 def _cleanup_path(path, log):

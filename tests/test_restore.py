@@ -669,3 +669,110 @@ def test_restore_commit_keeps_originals_when_a_partial_restore_cannot_be_cleared
         assert not (live_dir / config.PHOTOS_DIRNAME / config.PHOTOS_DIRNAME).exists()
     finally:
         shutil.rmtree(kept, ignore_errors=True)
+
+
+def _make_staging(temp_dir, name, age_seconds, now):
+    folder = temp_dir / name
+    _make_file(folder / "logbook.db", b"private")
+    os.utime(folder, (now - age_seconds, now - age_seconds))
+    return folder
+
+
+def test_sweep_removes_only_old_restore_folders(tmp_path):
+    now = 1_000_000.0
+    old = _make_staging(tmp_path, "sfl_restore_old", restore_mod.STALE_STAGING_SECONDS + 60, now)
+    recent = _make_staging(tmp_path, "sfl_restore_recent", 60, now)
+    other = _make_staging(tmp_path, "other_app_old", restore_mod.STALE_STAGING_SECONDS + 60, now)
+    stray_file = tmp_path / "sfl_restore_file"
+    stray_file.write_bytes(b"x")
+    os.utime(stray_file, (0, 0))
+
+    restore_mod.sweep_stale_staging(lambda msg: None, temp_dir=str(tmp_path), now=now)
+
+    assert not old.exists()
+    assert recent.exists()
+    assert other.exists()
+    assert stray_file.exists()
+
+
+def test_sweep_logs_a_folder_it_cannot_delete(tmp_path, monkeypatch):
+    now = 1_000_000.0
+    _make_staging(tmp_path, "sfl_restore_locked", restore_mod.STALE_STAGING_SECONDS + 60, now)
+
+    def fail(path):
+        raise PermissionError("in use")
+
+    monkeypatch.setattr(restore_mod.shutil, "rmtree", fail)
+    logged = []
+
+    restore_mod.sweep_stale_staging(logged.append, temp_dir=str(tmp_path), now=now)
+
+    assert len(logged) == 1
+    assert "sfl_restore_locked" in logged[0] and "in use" in logged[0]
+
+
+def test_sweep_logs_when_temp_folder_cannot_be_read(tmp_path):
+    logged = []
+
+    restore_mod.sweep_stale_staging(logged.append, temp_dir=str(tmp_path / "missing"))
+
+    assert len(logged) == 1
+    assert "couldn't scan" in logged[0]
+
+
+def test_close_restore_discards_an_open_preview(tmp_path):
+    api = app.Api()
+    staging = tmp_path / "sfl_restore_preview"
+    _make_file(staging / "logbook.db", b"private")
+    api._restore_staging = str(staging)
+
+    api.close_restore()
+
+    assert not staging.exists()
+    assert api._restore_staging is None
+
+
+def test_close_restore_leaves_a_running_restore_alone(tmp_path):
+    api = app.Api()
+    staging = tmp_path / "sfl_restore_running"
+    _make_file(staging / "logbook.db", b"private")
+    api._restore_staging = str(staging)
+    api._restore_running = True
+
+    api.close_restore()
+
+    assert staging.exists()
+    assert api._restore_staging == str(staging)
+
+
+def test_restore_commit_clears_running_flag_even_when_it_raises(tmp_path, monkeypatch):
+    api = app.Api()
+    api._restore_staging = str(tmp_path / "staging")
+    seen = []
+
+    def boom(staging, log):
+        seen.append(api._restore_running)
+        raise RuntimeError("swap failed")
+
+    monkeypatch.setattr(restore_mod, "restore_commit", boom)
+
+    with pytest.raises(RuntimeError):
+        api.restore_commit()
+
+    assert seen == [True]
+    assert api._restore_running is False
+
+
+def test_restore_cancel_logs_a_staging_folder_it_cannot_delete(tmp_path, monkeypatch):
+    api = app.Api()
+    staging = tmp_path / "sfl_restore_locked"
+    _make_file(staging / "logbook.db", b"private")
+    api._restore_staging = str(staging)
+    logged = []
+    monkeypatch.setattr(api, "log", logged.append)
+    monkeypatch.setattr(restore_mod.shutil, "rmtree", lambda path: (_ for _ in ()).throw(PermissionError("in use")))
+
+    assert api.restore_cancel() == {"ok": True}
+
+    assert len(logged) == 1 and "in use" in logged[0]
+    assert api._restore_staging is None

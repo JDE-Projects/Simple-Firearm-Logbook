@@ -67,8 +67,15 @@ def test_run_uses_custom_api_and_database_opener_and_sets_config(monkeypatch, tm
         def set_window(self, win):
             calls["window"] = win
 
+        def log(self, msg):
+            calls.setdefault("log", []).append(msg)
+
+        def close_restore(self):
+            calls.setdefault("order", []).append("close_restore")
+
         def close_conn(self):
             calls["closed"] = True
+            calls.setdefault("order", []).append("close_conn")
 
     def open_database(path, schema_version):
         calls["db_path"] = path
@@ -101,6 +108,11 @@ def test_run_uses_custom_api_and_database_opener_and_sets_config(monkeypatch, tm
         lambda *args, **kwargs: calls.setdefault("window_args", (args, kwargs)) and FakeWindow(),
     )
     monkeypatch.setattr(launcher.webview, "start", lambda **kwargs: calls.setdefault("start", kwargs))
+    monkeypatch.setattr(
+        launcher.restore_service,
+        "sweep_stale_staging",
+        lambda log: calls.setdefault("swept_with", log),
+    )
 
     launcher.run(description)
 
@@ -112,6 +124,8 @@ def test_run_uses_custom_api_and_database_opener_and_sets_config(monkeypatch, tm
     assert calls["window_args"][0][0] == "Embedding Logbook"
     assert calls["start"]["gui"] == "qt"
     assert calls["closed"] is True
+    assert calls["swept_with"].__name__ == "log"
+    assert calls["order"] == ["close_restore", "close_conn"]
     assert config.APP_VERSION == "9.8.7"
     assert config.GITHUB_OWNER == "example-owner"
     assert config.GITHUB_REPO == "example-repo"
