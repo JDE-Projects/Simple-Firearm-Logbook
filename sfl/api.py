@@ -55,10 +55,12 @@ class Api:
         for message in warnings:
             self._show_debug_warning(window, message)
 
-    @staticmethod
-    def _show_debug_warning(window, message):
+    def _show_debug_warning(self, window, message):
+        # Send the log's real state with the warning, so a log that turned
+        # itself off also turns the switch off.
+        on = self._debug_log.is_enabled()
         try:
-            window.evaluate_js(f"showToast({json.dumps(message)});")
+            window.evaluate_js(f"showDebugWarning({json.dumps(message)}, {json.dumps(on)});")
         except Exception:  # noqa: BLE001, S110 - warning display is best effort.
             pass
 
