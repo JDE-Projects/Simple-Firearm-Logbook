@@ -42,6 +42,27 @@ def test_run_strips_remote_debugging_before_startup(monkeypatch):
     assert calls == [(os.environ, sys.argv, getattr(sys, "frozen", False))]
 
 
+@pytest.mark.parametrize(("before", "after"), [(None, "1"), ("0", "0")])
+def test_run_turns_off_qt_shader_disk_cache_unless_already_set(monkeypatch, before, after):
+    # setenv first so monkeypatch restores the original value afterwards,
+    # including when the variable was never set.
+    monkeypatch.setenv("QT_DISABLE_SHADER_DISK_CACHE", before or "")
+    if before is None:
+        monkeypatch.delenv("QT_DISABLE_SHADER_DISK_CACHE")
+    seen = []
+
+    def strip(environ, argv, frozen):
+        seen.append(environ.get("QT_DISABLE_SHADER_DISK_CACHE"))
+        raise RuntimeError("stop after first startup action")
+
+    monkeypatch.setattr(launcher, "strip_remote_debugging", strip)
+
+    with pytest.raises(RuntimeError, match="stop after first startup action"):
+        launcher.run()
+
+    assert seen == [after]
+
+
 def test_run_uses_custom_api_and_database_opener_and_sets_config(monkeypatch, tmp_path):
     calls = {}
     monkeypatch.setattr(config, "APP_VERSION", config.APP_VERSION)
