@@ -5,6 +5,7 @@ import datetime
 import json
 import os
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from sfl import config, paths
@@ -34,8 +35,20 @@ def save_theme(log, theme: str):
     return {"ok": False}
 
 
-def open_url(url: str):
+def open_url(log, url):
     """Open a link in the system browser, never by navigating the app window."""
+    if not isinstance(url, str):
+        log("open_url refused: only https://jde-projects.com links are allowed")
+        return {"ok": False}
+    try:
+        parts = urllib.parse.urlsplit(url)
+    except ValueError:
+        log("open_url refused: only https://jde-projects.com links are allowed")
+        return {"ok": False}
+    if parts.scheme != "https" or parts.netloc != "jde-projects.com":
+        log("open_url refused: only https://jde-projects.com links are allowed")
+        return {"ok": False}
+
     import webbrowser
 
     webbrowser.open(url)
