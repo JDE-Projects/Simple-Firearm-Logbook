@@ -108,4 +108,4 @@ community tool: review and test it before relying on it.
 Released under the PolyForm Noncommercial 1.0.0 license. See LICENSE. If the tool bundles
 third-party code, see THIRD-PARTY-LICENSES.txt.
 
-For commercial licensing, open a [GitHub issue](https://github.com/JDE-Projects/Simple-Firearm-Logbook/issues) with the title "Commercial License Inquiry".
+For commercial licensing, see the [JDE-Projects support page](https://jde-projects.com/support/#commercial-licensing).
