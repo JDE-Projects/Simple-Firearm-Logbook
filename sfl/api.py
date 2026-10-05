@@ -1,11 +1,14 @@
 """Bridge exposed to the UI. A thin facade: holds the live state (db
-connection, window, debug flag/path) and delegates every method to a plain
+connection, window, debug log) and delegates every method to a plain
 service function in sfl.services.*, passing that state through as explicit
 arguments. Methods return JSON-able dicts; the UI awaits."""
+import json
 import os
 import sqlite3
+import threading
 
 from sfl import config, db, paths
+from sfl.debug_log import DebugLog
 from sfl.services import attachments as attachments_service
 from sfl.services import backup as backup_service
 from sfl.services import export as export_service
@@ -15,6 +18,7 @@ from sfl.services import imports as imports_service
 from sfl.services import photos as photos_service
 from sfl.services import restore as restore_service
 from sfl.services import settings as settings_service
+from sfl.utils import _redact_username
 
 
 class Api:
@@ -23,14 +27,48 @@ class Api:
     def __init__(self):
         self._window = None
         self._conn = None
-        self._debug = False
-        self._debug_path = None
+        self._debug_warning_lock = threading.Lock()
+        self._debug_warnings = []
+        self._page_loaded = False
+        self._debug_log = DebugLog(
+            paths.app_dir(),
+            "Simple Firearm Logbook",
+            redact=_redact_username,
+            on_warning=self._on_debug_warning,
+        )
         self._restore_staging = None
         self._restore_running = False
         self._app_description = None
 
     def set_window(self, w):
-        self._window = w
+        with self._debug_warning_lock:
+            self._window = w
+
+    def flush_debug_warnings(self):
+        with self._debug_warning_lock:
+            self._page_loaded = True
+            window = self._window
+            if window is None:
+                return
+            warnings = self._debug_warnings
+            self._debug_warnings = []
+        for message in warnings:
+            self._show_debug_warning(window, message)
+
+    @staticmethod
+    def _show_debug_warning(window, message):
+        try:
+            window.evaluate_js(f"showToast({json.dumps(message)});")
+        except Exception:  # noqa: BLE001, S110 - warning display is best effort.
+            pass
+
+    def _on_debug_warning(self, message):
+        with self._debug_warning_lock:
+            window = self._window
+            if window is None or not self._page_loaded:
+                self._debug_warnings.append(message)
+                return
+        self._show_debug_warning(window, message)
 
     def set_conn(self, conn: sqlite3.Connection):
         self._conn = conn
@@ -362,10 +400,18 @@ class Api:
 
     # --- debug log --------------------------------------------------------------
     def set_debug(self, on: bool):
-        self._debug, self._debug_path, started = settings_service.set_debug(on, self._debug_path)
-        if started:
+        was_enabled = self._debug_log.is_enabled()
+        if not self._debug_log.set_enabled(on):
+            return {"ok": False, "error": "Couldn't start debug logging."}
+        if on and not was_enabled:
             self.log("Debug log started")
         return {"ok": True}
 
     def log(self, msg: str):
-        settings_service.log(self._debug, self._debug_path, msg)
+        # Privacy rule for every call site: this app has no credentials, but
+        # keep entries to ids, counts, and status words, not free-text notes
+        # or personal details the user typed in.
+        self._debug_log.log(msg)
+
+    def prune_debug_logs(self):
+        self._debug_log.prune()

@@ -23,6 +23,11 @@
       "script": "tools/ui_check/window_fit.js",
       "fixture": "tools/ui_check/fixture_window_fit.py",
       "timeout_s": 120
+    },
+    "debug-log": {
+      "script": "tools/ui_check/debug_log.js",
+      "fixture": "tools/ui_check/fixture_debug_log.py",
+      "timeout_s": 120
     }
   }
 }

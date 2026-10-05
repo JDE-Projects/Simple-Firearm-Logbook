@@ -55,7 +55,7 @@ def test_run_uses_custom_api_and_database_opener_and_sets_config(monkeypatch, tm
 
     class FakeWindow:
         title = "Embedding Logbook"
-        events = type("Events", (), {"shown": FakeEvent(), "closing": FakeEvent()})()
+        events = type("Events", (), {"shown": FakeEvent(), "loaded": FakeEvent(), "closing": FakeEvent()})()
 
     class FakeApi:
         def set_app_description(self, description):
@@ -69,6 +69,12 @@ def test_run_uses_custom_api_and_database_opener_and_sets_config(monkeypatch, tm
 
         def log(self, msg):
             calls.setdefault("log", []).append(msg)
+
+        def prune_debug_logs(self):
+            calls["pruned"] = True
+
+        def flush_debug_warnings(self):
+            calls["warnings_flushed"] = True
 
         def close_restore(self):
             calls.setdefault("order", []).append("close_restore")
@@ -125,6 +131,7 @@ def test_run_uses_custom_api_and_database_opener_and_sets_config(monkeypatch, tm
     assert calls["start"]["gui"] == "qt"
     assert calls["closed"] is True
     assert calls["swept_with"].__name__ == "log"
+    assert calls["pruned"] is True
     assert calls["order"] == ["close_restore", "close_conn"]
     assert config.APP_VERSION == "9.8.7"
     assert config.GITHUB_OWNER == "example-owner"
