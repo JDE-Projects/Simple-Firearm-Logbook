@@ -97,6 +97,7 @@ Restore replaces your whole logbook with the backup's contents, so use it to mov
 - Everything is stored locally next to the exe: the database, the photos folder, and the attachments folder.
 - Nothing is sent anywhere.
 - **Network use.** Other than the job you ask of it, this app makes one automatic network call: a check to GitHub for a newer release (at startup and when you press **Check for updates**), which sends only a version request. It collects and sends no personal data, usage data, or analytics.
+- **Privacy policy.** The full privacy policy for this app and the other JDE-Projects tools is at https://jde-projects.com/privacy.
 
 ## A note on how this was built
 This project was built with AI assistance. The design decisions, feature
