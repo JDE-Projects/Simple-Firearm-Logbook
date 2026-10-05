@@ -47,6 +47,9 @@ DEFAULT_APP_DESCRIPTION = AppDescription(
 
 def run(description: AppDescription | None = None) -> None:
     """Start the logbook using the supplied application description."""
+    # Stops Qt leaving an empty %LOCALAPPDATA%\<exe name>\cache\qtpipelinecache-*
+    # folder the uninstaller never removes. Must run before the window is created.
+    os.environ.setdefault("QT_DISABLE_SHADER_DISK_CACHE", "1")
     strip_remote_debugging(os.environ, sys.argv, getattr(sys, "frozen", False))
     description = description or DEFAULT_APP_DESCRIPTION
     config.APP_VERSION = description.version
