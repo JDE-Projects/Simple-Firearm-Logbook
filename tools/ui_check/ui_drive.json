@@ -1,0 +1,13 @@
+{
+  "entry": "simple_firearm_logbook.py",
+  "mutex": "JDE_SimpleFirearmLogbook_SingleInstance",
+  "window_title": "Simple Firearm Logbook",
+  "page_url_contains": "simple_firearm_logbook-UI.html",
+  "scenarios": {
+    "smoke": {
+      "script": "tools/ui_check/smoke.js",
+      "fixture": "tools/ui_check/fixture.py",
+      "timeout_s": 120
+    }
+  }
+}
