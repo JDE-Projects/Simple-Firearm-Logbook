@@ -1,0 +1,8 @@
+# Build helper pin for every Windows Simple X Tool that uses a hash-locked
+# requirements.txt. Copy this file verbatim into the tool's repo root.
+# A few packages (proxy-tools, which pywebview needs) are published only as
+# source code, so pip downloads setuptools to build them. That download sits
+# outside the hash-locked list, so this file pins its version instead. Both
+# the tool's build bat and the reusable workflows pass it to pip with
+# --build-constraint. Keep it at the setuptools version in the tool's lock.
+setuptools==84.0.0
