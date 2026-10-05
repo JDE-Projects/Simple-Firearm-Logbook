@@ -504,6 +504,41 @@ def test_restore_commit_rolls_back_on_failure(tmp_path, monkeypatch):
         restored.close()
 
 
+def test_restore_commit_reports_and_reconnects_when_aside_folder_fails(tmp_path, monkeypatch):
+    live_dir = tmp_path / "live_a"
+    live_dir.mkdir()
+    monkeypatch.setattr(paths, "app_dir", lambda: str(live_dir))
+    conn_a = app.open_db(str(live_dir / config.DB_FILENAME))
+    _insert_firearm(conn_a, "00001", "Ruger", "10/22")
+    conn_a.commit()
+    conn_a.close()
+
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    staged_conn = app.open_db(str(staging / config.DB_FILENAME))
+    _insert_firearm(staged_conn, "00001", "Sig", "P320")
+    staged_conn.commit()
+    staged_conn.close()
+
+    def failing_mkdtemp(*a, **kw):
+        raise PermissionError("simulated: folder creation denied")
+
+    monkeypatch.setattr(restore_mod.tempfile, "mkdtemp", failing_mkdtemp)
+
+    api = app.Api()
+    api.set_conn(app.open_db(str(live_dir / config.DB_FILENAME)))
+    api._restore_staging = str(staging)
+    try:
+        result = api.restore_commit()
+
+        assert result["ok"] is False
+        assert "not changed" in result["error"]
+        rows = api._conn.execute("SELECT make, model FROM firearms").fetchall()
+        assert [tuple(r) for r in rows] == [("Ruger", "10/22")]
+    finally:
+        api.close_conn()
+
+
 def test_restore_commit_keeps_originals_when_rollback_fails_setting_aside(tmp_path, monkeypatch):
     live_dir = tmp_path / "live"
     live_dir.mkdir()
@@ -537,6 +572,7 @@ def test_restore_commit_keeps_originals_when_rollback_fails_setting_aside(tmp_pa
     kept = result["kept_folder"]
     try:
         assert result["ok"] is False
+        assert Path(kept).parent == live_dir
         assert kept in result["error"]
         assert "not changed" not in result["error"].lower()
         assert "could not be fully put back" in result["error"].lower()

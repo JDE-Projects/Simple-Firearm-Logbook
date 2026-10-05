@@ -293,13 +293,21 @@ def delete_photo(conn, log, photo_id):
             if nxt:
                 cur.execute("UPDATE photos SET is_primary=1 WHERE id=?", (nxt["id"],))
         conn.commit()
+        warning = None
         if full:
             try:
                 os.remove(full)
-            except Exception:
-                pass
+            except Exception as e:
+                log(f"Deleted photo {photo_id}, but couldn't remove file {full}: {e}")
+                warning = (
+                    "The photo was deleted, but its file could not be removed from disk. "
+                    "See the log for details."
+                )
         log(f"Deleted photo {photo_id}")
-        return {"ok": True, "photos": _get_photos(conn, firearm_id)}
+        result = {"ok": True, "photos": _get_photos(conn, firearm_id)}
+        if warning:
+            result["warning"] = warning
+        return result
     except Exception as e:
         conn.rollback()
         log(f"delete_photo failed: {e}")

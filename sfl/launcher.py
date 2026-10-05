@@ -11,6 +11,7 @@ from sfl import config, platform_win
 from sfl.api import Api
 from sfl.db import NewerSchemaError, open_db
 from sfl.paths import app_dir, resource_path
+from sfl.remote_debug import strip_remote_debugging
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,7 @@ DEFAULT_APP_DESCRIPTION = AppDescription(
 
 def run(description: AppDescription | None = None) -> None:
     """Start the logbook using the supplied application description."""
+    strip_remote_debugging(os.environ, sys.argv, getattr(sys, "frozen", False))
     description = description or DEFAULT_APP_DESCRIPTION
     config.APP_VERSION = description.version
     config.GITHUB_OWNER = description.update_owner

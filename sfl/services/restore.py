@@ -215,7 +215,11 @@ def restore_commit(staging_dir, log):
     staged_photos = os.path.join(staging_dir, config.PHOTOS_DIRNAME)
     staged_attachments = os.path.join(staging_dir, config.ATTACHMENTS_DIRNAME)
 
-    aside_dir = tempfile.mkdtemp(prefix="sfl_restore_aside_")
+    try:
+        aside_dir = tempfile.mkdtemp(prefix="sfl_restore_aside_", dir=base)
+    except OSError as e:
+        log(f"restore_commit: couldn't create the set-aside folder: {e}")
+        return {"ok": False, "error": "Couldn't start the restore." + not_changed}
     moved_aside = []  # (aside_path, original_path), in the order they were moved
 
     try:

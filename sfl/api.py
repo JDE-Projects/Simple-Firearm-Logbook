@@ -339,7 +339,7 @@ class Api:
     # --- misc bridge helpers --------------------------------------------------
     def open_url(self, url: str):
         """Open a link in the system browser, never by navigating the app window."""
-        return settings_service.open_url(url)
+        return settings_service.open_url(self.log, url)
 
     def check_update(self):
         """Compare the latest published release to APP_VERSION. Quiet in the UI on

@@ -1959,6 +1959,7 @@ async function confirmDeleteAttachment(){
   renderDocuments();
   await loadFirearms();
   await loadAttachmentsTotal();
+  if (r.warning) showToast(r.warning);
 }
 
 /* ---------- mark as owned (undo disposition) ---------- */

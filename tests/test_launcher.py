@@ -1,5 +1,6 @@
 """Tests for configurable package startup."""
 import os
+import sys
 
 import pytest
 
@@ -24,6 +25,21 @@ def test_default_description_matches_current_app_values():
     assert description.schema_version == config.SCHEMA_VERSION
     assert description.extension_script is None
     assert description.extension_stylesheet is None
+
+
+def test_run_strips_remote_debugging_before_startup(monkeypatch):
+    calls = []
+
+    def strip(environ, argv, frozen):
+        calls.append((environ, argv, frozen))
+        raise RuntimeError("stop after first startup action")
+
+    monkeypatch.setattr(launcher, "strip_remote_debugging", strip)
+
+    with pytest.raises(RuntimeError, match="stop after first startup action"):
+        launcher.run()
+
+    assert calls == [(os.environ, sys.argv, getattr(sys, "frozen", False))]
 
 
 def test_run_uses_custom_api_and_database_opener_and_sets_config(monkeypatch, tmp_path):
