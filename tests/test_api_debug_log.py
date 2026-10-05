@@ -38,10 +38,39 @@ def test_debug_warning_queues_then_flushes_and_uses_safe_javascript():
     assert window.calls == []
 
     api.flush_debug_warnings()
-    assert window.calls == [f"showToast({json.dumps(message)});"]
+    assert window.calls == [f"showDebugWarning({json.dumps(message)}, false);"]
 
     api._on_debug_warning("shown immediately")
-    assert window.calls[-1] == f"showToast({json.dumps('shown immediately')});"
+    assert window.calls[-1] == f"showDebugWarning({json.dumps('shown immediately')}, false);"
+
+
+def test_debug_warning_while_logging_keeps_switch_on(monkeypatch, tmp_path):
+    monkeypatch.setattr(paths, "app_dir", lambda: str(tmp_path))
+    api = Api()
+    window = FakeWindow()
+    api.set_window(window)
+    api.flush_debug_warnings()
+    assert api.set_debug(True) == {"ok": True}
+
+    api._on_debug_warning("could not delete old log")
+    assert window.calls[-1].endswith(", true);")
+
+
+def test_log_that_cannot_start_turns_switch_off(monkeypatch, tmp_path):
+    monkeypatch.setattr(paths, "app_dir", lambda: str(tmp_path))
+    api = Api()
+    window = FakeWindow()
+    api.set_window(window)
+    api.flush_debug_warnings()
+    monkeypatch.setattr(api._debug_log, "_write_new_file", lambda path: None)
+
+    result = api.set_debug(True)
+
+    assert result["ok"] is False
+    assert api._debug_log.is_enabled() is False
+    assert len(window.calls) == 1
+    assert "could not create" in window.calls[0]
+    assert window.calls[0].endswith(", false);")
 
 
 def test_write_failure_turns_logging_off_and_warns(monkeypatch, tmp_path):
@@ -65,3 +94,4 @@ def test_write_failure_turns_logging_off_and_warns(monkeypatch, tmp_path):
     assert api._debug_log.is_enabled() is False
     assert len(window.calls) == 1
     assert "Debug log: write failed" in window.calls[0]
+    assert window.calls[0].endswith(", false);")

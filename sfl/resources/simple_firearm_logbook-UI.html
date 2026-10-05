@@ -2443,7 +2443,17 @@ async function doRestoreCommit(){
 
 /* ---------- misc bridge helpers ---------- */
 function openUrl(u){ if (api()) api().open_url(u); }
-async function onDebugToggle(on){ if (api()) await api().set_debug(on); }
+async function onDebugToggle(on){
+  if (!api()) return;
+  const r = await api().set_debug(on);
+  // The debug log already put its warning in the banner; keep the switch
+  // truthful so it doesn't look like logging is running.
+  if (on && !(r && r.ok)) $("dbgToggle").checked = false;
+}
+function showDebugWarning(msg, on){
+  showToast(msg);
+  $("dbgToggle").checked = on;
+}
 
 /* ---------- update check ---------- */
 function fadeNotice(){

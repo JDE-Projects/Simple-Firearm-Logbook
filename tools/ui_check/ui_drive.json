@@ -28,6 +28,16 @@
       "script": "tools/ui_check/debug_log.js",
       "fixture": "tools/ui_check/fixture_debug_log.py",
       "timeout_s": 120
+    },
+    "debug-start-fail": {
+      "script": "tools/ui_check/debug_start_fail.js",
+      "fixture": "tools/ui_check/fixture_debug_start_fail.py",
+      "timeout_s": 120
+    },
+    "debug-write-fail": {
+      "script": "tools/ui_check/debug_write_fail.js",
+      "fixture": "tools/ui_check/fixture_debug_write_fail.py",
+      "timeout_s": 120
     }
   }
 }
