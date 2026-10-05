@@ -12,6 +12,7 @@ from sfl.api import Api
 from sfl.db import NewerSchemaError, open_db
 from sfl.paths import app_dir, resource_path
 from sfl.remote_debug import strip_remote_debugging
+from sfl.services import restore as restore_service
 
 
 @dataclass(frozen=True)
@@ -82,6 +83,7 @@ def run(description: AppDescription | None = None) -> None:
 
     api = description.api_class()
     api.set_app_description(description)
+    restore_service.sweep_stale_staging(api.log)
     try:
         conn = description.open_database(
             os.path.join(folder, config.DB_FILENAME), description.schema_version
@@ -112,4 +114,5 @@ def run(description: AppDescription | None = None) -> None:
         webview.start(gui="qt", icon=resource_path("simple_firearm_logbook.png"))
     except TypeError:
         webview.start(gui="qt")
+    api.close_restore()
     api.close_conn()

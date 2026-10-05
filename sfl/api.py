@@ -3,7 +3,6 @@ connection, window, debug flag/path) and delegates every method to a plain
 service function in sfl.services.*, passing that state through as explicit
 arguments. Methods return JSON-able dicts; the UI awaits."""
 import os
-import shutil
 import sqlite3
 
 from sfl import config, db, paths
@@ -27,6 +26,7 @@ class Api:
         self._debug = False
         self._debug_path = None
         self._restore_staging = None
+        self._restore_running = False
         self._app_description = None
 
     def set_window(self, w):
@@ -269,30 +269,40 @@ class Api:
         if not self._restore_staging:
             return {"ok": False, "error": "No backup is staged to restore."}
         staging = self._restore_staging
-        self.close_conn()
-        result = restore_service.restore_commit(staging, self.log)
-        db_path = os.path.join(paths.app_dir(), config.DB_FILENAME)
+        self._restore_running = True
         try:
-            opener = self._app_description.open_database if self._app_description else db.open_db
-            schema_version = (self._app_description.schema_version if self._app_description else config.SCHEMA_VERSION)
-            self.set_conn(opener(db_path, schema_version))
-        except Exception as e:
-            self.log(f"restore_commit: couldn't reopen the database: {e}")
-            if result.get("ok"):
-                result = {"ok": False, "error": "The restore finished but the app couldn't reopen the database. Restart the app."}
-        self._restore_staging = None
-        return result
+            self.close_conn()
+            result = restore_service.restore_commit(staging, self.log)
+            db_path = os.path.join(paths.app_dir(), config.DB_FILENAME)
+            try:
+                opener = self._app_description.open_database if self._app_description else db.open_db
+                schema_version = (self._app_description.schema_version if self._app_description else config.SCHEMA_VERSION)
+                self.set_conn(opener(db_path, schema_version))
+            except Exception as e:
+                self.log(f"restore_commit: couldn't reopen the database: {e}")
+                if result.get("ok"):
+                    result = {"ok": False, "error": "The restore finished but the app couldn't reopen the database. Restart the app."}
+            self._restore_staging = None
+            return result
+        finally:
+            self._restore_running = False
 
     def restore_cancel(self):
         """Discards a staged backup the user picked but didn't commit, so
         its temp folder doesn't linger."""
         if self._restore_staging:
-            try:
-                shutil.rmtree(self._restore_staging, ignore_errors=True)
-            except Exception:
-                pass
+            restore_service.discard_staging(self._restore_staging, self.log)
             self._restore_staging = None
         return {"ok": True}
+
+    def close_restore(self):
+        """Run once the window has closed: discards a restore preview the
+        user left open. A restore that is still copying files in is left
+        to finish, since deleting its staging folder would make it fail."""
+        if self._restore_running:
+            self.log("close_restore: a restore is still running, leaving its staging folder")
+            return
+        self.restore_cancel()
 
     # --- CSV import -----------------------------------------------------------
     def import_csv_pick(self):
