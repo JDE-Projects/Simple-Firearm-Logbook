@@ -1,17 +1,13 @@
 """App-level settings and misc bridge helpers: theme preference, opening a
-link in the system browser, the GitHub update check, the debug flag, and the
-debug log writer."""
-import datetime
+link in the system browser, and the GitHub update check."""
 import json
-import os
 import urllib.error
 import urllib.parse
 import urllib.request
 
-from sfl import config, paths
+from sfl import config
 from sfl.errors import _update_error_reason
 from sfl.prefs import load_prefs, save_prefs
-from sfl.utils import _redact_username
 
 
 def _load_theme() -> str:
@@ -87,32 +83,3 @@ def _is_newer(latest: str, current: str) -> bool:
         return out
 
     return parts(latest) > parts(current)
-
-
-def set_debug(on: bool, existing_debug_path):
-    """Computes the new debug flag and log-file path for Api.set_debug.
-    Returns (debug, debug_path, started), where started is True the one
-    time a fresh log file is created, so the caller can log the "Debug log
-    started" line after applying the new state."""
-    debug = bool(on)
-    debug_path = existing_debug_path
-    started = False
-    if debug and not debug_path:
-        stamp = datetime.datetime.now().strftime("%m%d%Y_%H%M%S")
-        debug_path = os.path.join(paths.app_dir(), f"Debug_Log_{stamp}.txt")
-        started = True
-    return debug, debug_path, started
-
-
-def log(debug: bool, debug_path, msg: str) -> None:
-    # Privacy rule for every call site: this app has no credentials, but
-    # keep entries to ids, counts, and status words, not free-text notes
-    # or personal details the user typed in.
-    if not debug or not debug_path:
-        return
-    try:
-        ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        with open(debug_path, "a", encoding="utf-8") as f:
-            f.write(f"[{ts}] {_redact_username(msg)}\n")
-    except Exception:
-        pass

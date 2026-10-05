@@ -83,6 +83,7 @@ def run(description: AppDescription | None = None) -> None:
 
     api = description.api_class()
     api.set_app_description(description)
+    api.prune_debug_logs()
     restore_service.sweep_stale_staging(api.log)
     try:
         conn = description.open_database(
@@ -104,6 +105,7 @@ def run(description: AppDescription | None = None) -> None:
     )
     api.set_window(win)
     win.events.shown += lambda: platform_win._restore_geometry(win)
+    win.events.loaded += api.flush_debug_warnings
 
     def _on_window_closing():
         platform_win._save_geometry(win)
