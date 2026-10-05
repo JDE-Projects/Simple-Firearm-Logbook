@@ -5405,4 +5405,4 @@ Fonts - Sora and JetBrains Mono, OFL-1.1
 Sora             Copyright 2019 The Sora Project Authors
 JetBrains Mono   Copyright 2020 The JetBrains Mono Project Authors
 
-The full OFL-1.1 text for both fonts is in _internal\fonts\OFL.txt.
+The full OFL-1.1 text for both fonts is in _internal\resources\fonts\OFL.txt.
