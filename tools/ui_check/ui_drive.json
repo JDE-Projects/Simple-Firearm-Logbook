@@ -13,6 +13,11 @@
       "script": "tools/ui_check/restore.js",
       "fixture": "tools/ui_check/fixture_restore.py",
       "timeout_s": 120
+    },
+    "restore-close": {
+      "script": "tools/ui_check/restore_close.js",
+      "fixture": "tools/ui_check/fixture_restore.py",
+      "timeout_s": 120
     }
   }
 }
