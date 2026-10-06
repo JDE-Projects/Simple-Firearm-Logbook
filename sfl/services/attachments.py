@@ -1,6 +1,5 @@
 """Document attachments: verbatim file copies (never opened or recompressed)
-with an editable display label, plus rename/open/delete/save-a-copy and the
-global disk-use total."""
+with an editable display label, plus rename/open/delete/save-a-copy."""
 import os
 import shutil
 import subprocess
@@ -267,23 +266,3 @@ def save_attachment_copy(conn, window, log, attachment_id):
     except Exception as e:
         log(f"save_attachment_copy failed: {e}")
         return {"ok": False, "error": "Couldn't save a copy."}
-
-
-def get_attachment_totals(conn, log):
-    """Global disk-use total across every firearm's documents, summed
-    from the stored size_bytes column, plus a count of documents whose
-    file is missing from disk (a light per-file existence check)."""
-    try:
-        row = conn.execute(
-            "SELECT COUNT(*) AS c, COALESCE(SUM(size_bytes), 0) AS b FROM attachments"
-        ).fetchone()
-        filenames = conn.execute("SELECT filename FROM attachments").fetchall()
-        missing = 0
-        for fn in filenames:
-            full = paths._safe_attachment_path(fn["filename"])
-            if not (full and os.path.isfile(full)):
-                missing += 1
-        return {"ok": True, "total_bytes": row["b"], "count": row["c"], "missing": missing}
-    except Exception as e:
-        log(f"get_attachment_totals failed: {e}")
-        return {"ok": False, "error": "Couldn't load the document totals."}

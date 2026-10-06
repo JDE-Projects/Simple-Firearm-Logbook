@@ -253,12 +253,6 @@ class Api:
         first') so a deletion is never the only chance to keep the file."""
         return attachments_service.save_attachment_copy(self._conn, self._window, self.log, attachment_id)
 
-    def get_attachment_totals(self):
-        """Global disk-use total across every firearm's documents, summed
-        from the stored size_bytes column, plus a count of documents whose
-        file is missing from disk (a light per-file existence check)."""
-        return attachments_service.get_attachment_totals(self._conn, self.log)
-
     # --- exports ------------------------------------------------------------
     def export_single_html(self, firearm_id):
         """Self-contained single-firearm export: one HTML file with photos

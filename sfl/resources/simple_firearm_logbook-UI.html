@@ -351,13 +351,17 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
 }
 
 /* ---- bottom bar ---- */
+/* equal side columns keep the update notice on the window's true center,
+   however wide the version and button on the right are */
 .bottom-bar {
   flex:0 0 auto; height:44px;
   background:var(--bg-2); border-top:1px solid var(--border);
-  display:flex; align-items:center; justify-content:space-between; padding:0 18px;
+  display:grid; grid-template-columns:1fr minmax(0, auto) 1fr;
+  align-items:center; gap:10px; padding:0 18px;
 }
-.bottom-bar .bar-left, .bottom-bar .bar-right { display:flex; align-items:center; gap:10px; flex:none; }
-.bottom-bar .bar-center { flex:1; display:flex; align-items:center; justify-content:center; }
+.bottom-bar .bar-left, .bottom-bar .bar-right { display:flex; align-items:center; gap:10px; }
+.bottom-bar .bar-right { justify-content:flex-end; }
+.bottom-bar .bar-center { display:flex; align-items:center; justify-content:center; min-width:0; }
 .dbg-toggle { display:inline-flex; align-items:center; gap:7px; cursor:pointer; user-select:none; }
 .dbg-toggle input { position:absolute; opacity:0; pointer-events:none; }
 .dbg-track { width:32px; height:17px; border-radius:999px; background:var(--panel-2); border:1px solid var(--border-2); position:relative; transition:all .14s; }
@@ -977,7 +981,6 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
         <span class="dbg-track"></span>
         <span class="dbg-label">Debug log</span>
       </label>
-      <span id="attachmentsTotalLabel" class="dbg-label"></span>
     </div>
     <div class="bar-center">
       <span id="updateNotice"></span>
@@ -1810,19 +1813,6 @@ function renderDocuments(){
   `).join("");
 }
 
-async function loadAttachmentsTotal(){
-  if (!api()) return;
-  const r = await api().get_attachment_totals();
-  const el = $("attachmentsTotalLabel");
-  if (!el) return;
-  if (!r || !r.ok || !r.count){
-    el.textContent = "";
-    return;
-  }
-  el.textContent = `Attachments: ${formatSize(r.total_bytes)} in ${r.count} file${r.count === 1 ? "" : "s"}`
-    + (r.missing > 0 ? `, ${r.missing} missing` : "");
-}
-
 async function addAttachments(){
   if (!api() || !currentFirearm) return;
   const picked = await api().choose_attachments();
@@ -1864,7 +1854,6 @@ async function runAddAttachments(paths){
   currentAttachments = r.attachments;
   renderDocuments();
   await loadFirearms();
-  await loadAttachmentsTotal();
   if (r.warning) showToast(r.warning);
 }
 
@@ -1958,7 +1947,6 @@ async function confirmDeleteAttachment(){
   currentAttachments = r.attachments;
   renderDocuments();
   await loadFirearms();
-  await loadAttachmentsTotal();
   if (r.warning) showToast(r.warning);
 }
 
@@ -2425,7 +2413,7 @@ async function doRestoreCommit(){
     return;
   }
   RESTORE.committed = true;
-  await Promise.all([loadFirearms(), loadAutocomplete(), loadAttachmentsTotal()]);
+  await Promise.all([loadFirearms(), loadAutocomplete()]);
   const c = r.counts || {};
   $("restoreModalTitle").textContent = "Restore complete";
   $("restoreModalMsg").textContent = "";
@@ -2556,7 +2544,7 @@ async function boot(){
     reportExtensionError("Couldn't load extension: " + (error && error.message ? error.message : String(error)));
   }
 
-  await Promise.all([loadFirearms(), loadAutocomplete(), loadAttachmentsTotal()]);
+  await Promise.all([loadFirearms(), loadAutocomplete()]);
   emitExtensionEvent("started", {});
 
   // quiet startup update check, silent on failure
