@@ -351,13 +351,17 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
 }
 
 /* ---- bottom bar ---- */
+/* equal side columns keep the update notice on the window's true center,
+   however wide the version and button on the right are */
 .bottom-bar {
   flex:0 0 auto; height:44px;
   background:var(--bg-2); border-top:1px solid var(--border);
-  display:flex; align-items:center; justify-content:space-between; padding:0 18px;
+  display:grid; grid-template-columns:1fr minmax(0, auto) 1fr;
+  align-items:center; gap:10px; padding:0 18px;
 }
-.bottom-bar .bar-left, .bottom-bar .bar-right { display:flex; align-items:center; gap:10px; flex:none; }
-.bottom-bar .bar-center { flex:1; display:flex; align-items:center; justify-content:center; }
+.bottom-bar .bar-left, .bottom-bar .bar-right { display:flex; align-items:center; gap:10px; }
+.bottom-bar .bar-right { justify-content:flex-end; }
+.bottom-bar .bar-center { display:flex; align-items:center; justify-content:center; min-width:0; }
 .dbg-toggle { display:inline-flex; align-items:center; gap:7px; cursor:pointer; user-select:none; }
 .dbg-toggle input { position:absolute; opacity:0; pointer-events:none; }
 .dbg-track { width:32px; height:17px; border-radius:999px; background:var(--panel-2); border:1px solid var(--border-2); position:relative; transition:all .14s; }

@@ -38,6 +38,11 @@
       "script": "tools/ui_check/debug_write_fail.js",
       "fixture": "tools/ui_check/fixture_debug_write_fail.py",
       "timeout_s": 120
+    },
+    "bottom-bar": {
+      "script": "tools/ui_check/bottom_bar.js",
+      "fixture": "tools/ui_check/fixture_bottom_bar.py",
+      "timeout_s": 120
     }
   }
 }
