@@ -329,6 +329,21 @@ def test_commit_assigns_a_fresh_log_number_ignoring_any_imported_one(tmp_path):
         api.close_conn()
 
 
+def test_commit_ignores_extension_data(tmp_path):
+    api = _api(tmp_path)
+    try:
+        r = api.import_csv_commit(
+            [_record(make="Glock", model="19")], extension_data={"ignored": True}
+        )
+        assert r["ok"], r
+        assert r["imported"] == 1
+        got = api.get_firearm(1)["firearm"]
+        assert got["make"] == "Glock"
+        assert got["model"] == "19"
+    finally:
+        api.close_conn()
+
+
 def test_commit_honors_disposition_fields_via_api(tmp_path):
     api = _api(tmp_path)
     try:
