@@ -95,8 +95,8 @@ Restore replaces your whole logbook with the backup's contents, so use it to mov
 
 ## Security and privacy
 - Everything is stored locally next to the exe: the database, the photos folder, and the attachments folder.
-- Nothing is sent anywhere.
 - **Network use.** Other than the job you ask of it, this app makes one automatic network call: a check to GitHub for a newer release (at startup and when you press **Check for updates**), which sends only a version request. It collects and sends no personal data, usage data, or analytics.
+- **Privacy policy.** The full privacy policy for this app and the other JDE-Projects tools is at https://jde-projects.com/privacy.
 
 ## A note on how this was built
 This project was built with AI assistance. The design decisions, feature
@@ -108,4 +108,4 @@ community tool: review and test it before relying on it.
 Released under the PolyForm Noncommercial 1.0.0 license. See LICENSE. If the tool bundles
 third-party code, see THIRD-PARTY-LICENSES.txt.
 
-For commercial licensing, open a [GitHub issue](https://github.com/JDE-Projects/Simple-Firearm-Logbook/issues) with the title "Commercial License Inquiry".
+For commercial licensing, see the [JDE-Projects support page](https://jde-projects.com/support/#commercial-licensing).
