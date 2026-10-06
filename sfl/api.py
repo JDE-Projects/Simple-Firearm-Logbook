@@ -316,9 +316,12 @@ class Api:
                 self.log(f"restore_commit: couldn't reopen the database: {e}")
                 if result.get("ok"):
                     result = {"ok": False, "error": "The restore finished but the app couldn't reopen the database. Restart the app."}
-            self._restore_staging = None
             return result
         finally:
+            # A failed restore leaves its staged copy behind, and a window
+            # closed mid-restore skipped discarding it, so it goes here.
+            restore_service.discard_staging(staging, self.log)
+            self._restore_staging = None
             self._restore_running = False
 
     def restore_cancel(self):

@@ -535,6 +535,8 @@ def test_restore_commit_reports_and_reconnects_when_aside_folder_fails(tmp_path,
         assert "not changed" in result["error"]
         rows = api._conn.execute("SELECT make, model FROM firearms").fetchall()
         assert [tuple(r) for r in rows] == [("Ruger", "10/22")]
+        assert not staging.exists()
+        assert api._restore_staging is None
     finally:
         api.close_conn()
 
@@ -761,6 +763,26 @@ def test_restore_commit_clears_running_flag_even_when_it_raises(tmp_path, monkey
 
     assert seen == [True]
     assert api._restore_running is False
+
+
+def test_restore_failing_after_window_closed_still_discards_staging(tmp_path, monkeypatch):
+    api = app.Api()
+    staging = tmp_path / "sfl_restore_closing"
+    _make_file(staging / "logbook.db", b"private")
+    api._restore_staging = str(staging)
+
+    def close_then_fail(staging_dir, log):
+        api.close_restore()  # the window closes while the restore runs
+        assert os.path.isdir(staging_dir)
+        return {"ok": False, "error": "Couldn't restore the backup."}
+
+    monkeypatch.setattr(restore_mod, "restore_commit", close_then_fail)
+    monkeypatch.setattr("sfl.db.open_db", lambda *a, **kw: None)
+
+    assert api.restore_commit()["ok"] is False
+
+    assert not staging.exists()
+    assert api._restore_staging is None
 
 
 def test_restore_cancel_logs_a_staging_folder_it_cannot_delete(tmp_path, monkeypatch):
