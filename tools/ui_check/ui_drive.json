@@ -43,6 +43,11 @@
       "script": "tools/ui_check/bottom_bar.js",
       "fixture": "tools/ui_check/fixture_bottom_bar.py",
       "timeout_s": 120
+    },
+    "missing-document": {
+      "script": "tools/ui_check/missing_document.js",
+      "fixture": "tools/ui_check/fixture_missing_document.py",
+      "timeout_s": 120
     }
   }
 }

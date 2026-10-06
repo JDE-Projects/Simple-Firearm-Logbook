@@ -1868,7 +1868,7 @@ async function openAttachment(attachmentId){
     return;
   }
   if (r.missing){
-    showToast(`That file is missing. Use Delete to remove "${esc(r.label || "")}" from the list.`);
+    showToast(`That file is missing. Use Delete to remove "${r.label || ""}" from the list.`);
     return;
   }
   showToast(r.error || "Couldn't open the document.");
@@ -2479,7 +2479,7 @@ $("updateBtn").onclick = async () => {
       fadeNotice();
       openUpdateErrorModal(r.reason || "The app couldn't run the update check.");
     } else {
-      notice.textContent = "You're on the latest version (v" + esc(r.current) + ")";
+      notice.textContent = "You're on the latest version (v" + r.current + ")";
       fadeNotice();
     }
   } catch (e) {
