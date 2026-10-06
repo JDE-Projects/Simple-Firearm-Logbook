@@ -977,7 +977,6 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
         <span class="dbg-track"></span>
         <span class="dbg-label">Debug log</span>
       </label>
-      <span id="attachmentsTotalLabel" class="dbg-label"></span>
     </div>
     <div class="bar-center">
       <span id="updateNotice"></span>
@@ -1810,19 +1809,6 @@ function renderDocuments(){
   `).join("");
 }
 
-async function loadAttachmentsTotal(){
-  if (!api()) return;
-  const r = await api().get_attachment_totals();
-  const el = $("attachmentsTotalLabel");
-  if (!el) return;
-  if (!r || !r.ok || !r.count){
-    el.textContent = "";
-    return;
-  }
-  el.textContent = `Attachments: ${formatSize(r.total_bytes)} in ${r.count} file${r.count === 1 ? "" : "s"}`
-    + (r.missing > 0 ? `, ${r.missing} missing` : "");
-}
-
 async function addAttachments(){
   if (!api() || !currentFirearm) return;
   const picked = await api().choose_attachments();
@@ -1864,7 +1850,6 @@ async function runAddAttachments(paths){
   currentAttachments = r.attachments;
   renderDocuments();
   await loadFirearms();
-  await loadAttachmentsTotal();
   if (r.warning) showToast(r.warning);
 }
 
@@ -1958,7 +1943,6 @@ async function confirmDeleteAttachment(){
   currentAttachments = r.attachments;
   renderDocuments();
   await loadFirearms();
-  await loadAttachmentsTotal();
   if (r.warning) showToast(r.warning);
 }
 
@@ -2425,7 +2409,7 @@ async function doRestoreCommit(){
     return;
   }
   RESTORE.committed = true;
-  await Promise.all([loadFirearms(), loadAutocomplete(), loadAttachmentsTotal()]);
+  await Promise.all([loadFirearms(), loadAutocomplete()]);
   const c = r.counts || {};
   $("restoreModalTitle").textContent = "Restore complete";
   $("restoreModalMsg").textContent = "";
@@ -2556,7 +2540,7 @@ async function boot(){
     reportExtensionError("Couldn't load extension: " + (error && error.message ? error.message : String(error)));
   }
 
-  await Promise.all([loadFirearms(), loadAutocomplete(), loadAttachmentsTotal()]);
+  await Promise.all([loadFirearms(), loadAutocomplete()]);
   emitExtensionEvent("started", {});
 
   // quiet startup update check, silent on failure
