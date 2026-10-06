@@ -333,8 +333,9 @@ def _rollback(moved_aside, log):
 
 
 def discard_staging(staging_dir, log):
-    """Deletes a staged backup that will not be restored. A failure is
-    logged, and the launch sweep retries the folder on a later start."""
+    """Deletes a staged backup that is no longer needed: a cancelled
+    preview, or a restore that finished or failed. A failure is logged,
+    and the launch sweep retries the folder on a later start."""
     _cleanup_path(staging_dir, log)
 
 
