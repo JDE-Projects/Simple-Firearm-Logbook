@@ -2343,8 +2343,10 @@ async function renderRestorePreviewStep(){
   $("restoreModalTitle").textContent = "Preview and confirm";
   $("restoreModalMsg").textContent = "Nothing is changed yet.";
   const c = p.counts || {};
+  // created_at is "YYYY-MM-DDTHH:MM:SS"; show "YYYY-MM-DD HH:MM" to match the app's other dates.
+  const made = (p.created_at || "").replace("T", " ").slice(0, 16);
   $("restoreSummary").innerHTML =
-    `Backup made <b>${esc(p.created_at || "unknown date")}</b> with app version <b>${esc(p.app_version || "unknown")}</b>.<br>` +
+    `Backup made <b>${esc(made || "unknown date")}</b> with app version <b>${esc(p.app_version || "unknown")}</b>.<br>` +
     `<b>${c.firearms||0}</b> firearm(s), <b>${c.photos||0}</b> photo(s), <b>${c.attachments||0}</b> document(s).`;
 
   const blockedEl = $("restoreBlockedNote");

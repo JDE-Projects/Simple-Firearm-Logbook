@@ -30,6 +30,8 @@ export default async function restore(helpers) {
     await evaluate("document.getElementById('restore-err').textContent"));
   const summary = await evaluate("document.getElementById('restoreSummary').textContent");
   check("the preview counts the backup's one firearm", summary.includes("1 firearm(s)"), summary);
+  check("the preview shows the backup date as YYYY-MM-DD HH:MM",
+    /Backup made \d{4}-\d{2}-\d{2} \d{2}:\d{2} with/.test(summary), summary);
   await screenshot("restore-preview");
 
   // b) restore without a backup first.
