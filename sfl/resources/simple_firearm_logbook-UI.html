@@ -116,7 +116,7 @@ button.btn.small { padding:6px 10px; font-size:12px; }
 .toolbar-filters .filter-divider { width:1px; height:18px; background:var(--border-2); }
 #extensionFilterToggles { display:contents; }
 #toolbarSlot:empty, #detailSlot:empty, #firearmFormSlot:empty, #dispositionSlot:empty,
-#markOwnedSlot:empty, #deleteFirearmSlot:empty, #restoreSlot:empty { display:none; }
+#markOwnedSlot:empty, #deleteFirearmSlot:empty, #restoreSlot:empty, #csvImportSlot:empty { display:none; }
 .toolbar-search { position:relative; display:flex; align-items:center; }
 .toolbar-search input {
   font-family:"Sora", sans-serif; font-size:12.5px; color:var(--text); width:340px;
@@ -891,6 +891,7 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
 
       <div id="importPreviewStep" style="display:none;">
         <div class="import-summary" id="importSummary"></div>
+        <div id="csvImportSlot"></div>
         <div class="import-preview-wrap">
           <table class="import-preview-table">
             <thead><tr><th></th><th>Row</th><th>Make</th><th>Model</th><th>Serial</th><th>Status</th></tr></thead>
@@ -1069,7 +1070,7 @@ window.SFL = {
   slots: {
     toolbar: $("toolbarSlot"), detail: $("detailSlot"), firearmForm: $("firearmFormSlot"),
     disposition: $("dispositionSlot"), markOwned: $("markOwnedSlot"),
-    deleteFirearm: $("deleteFirearmSlot"), restore: $("restoreSlot"),
+    deleteFirearm: $("deleteFirearmSlot"), restore: $("restoreSlot"), csvImport: $("csvImportSlot"),
   },
   on(eventName, handler){
     if (!Object.prototype.hasOwnProperty.call(extensionHandlers, eventName)) {
@@ -1103,7 +1104,7 @@ window.SFL = {
     extensionBadges.push(fn);
   },
   onDialog(name, hooks){
-    if (!["firearmForm", "disposition", "markOwned", "deleteFirearm", "restore"].includes(name)) throw new Error('Unknown dialog "' + name + '".');
+    if (!["firearmForm", "disposition", "markOwned", "deleteFirearm", "restore", "csvImport"].includes(name)) throw new Error('Unknown dialog "' + name + '".');
     if (dialogHooks[name]) throw new Error('A dialog hook for "' + name + '" is already registered.');
     if (!hooks || typeof hooks !== "object" || ["open", "collect", "done"].some(key => hooks[key] !== undefined && typeof hooks[key] !== "function")) throw new Error("Dialog hooks must be functions.");
     dialogHooks[name] = hooks;
@@ -2216,7 +2217,7 @@ async function runImportPreview(){
   if (!r.ok){ errEl.textContent = r.error || "Couldn't validate that file."; return; }
   IMPORT.preview = r.preview;
   IMPORT.accepted = new Set(r.preview.filter(p => p.status !== "error").map(p => p.row_num));
-  renderImportPreviewStep();
+  await renderImportPreviewStep();
 }
 
 function importRowCell(rowNum, fieldKey){
@@ -2227,7 +2228,7 @@ function importRowCell(rowNum, fieldKey){
   return row.cells[idx] || "";
 }
 
-function renderImportPreviewStep(){
+async function renderImportPreviewStep(){
   $("importModalTitle").textContent = "Preview and confirm";
   $("importModalMsg").textContent = "Nothing is saved yet. Uncheck any row you don't want to import.";
   const ok = IMPORT.preview.filter(p => p.status === "ok").length;
@@ -2259,6 +2260,10 @@ function renderImportPreviewStep(){
   $("importBackBtn").style.display = "";
   $("importNextBtn").style.display = "none";
   $("importCommitBtn").style.display = "";
+  const records = IMPORT.preview
+    .filter(p => p.status !== "error" && p.record)
+    .map(p => p.record);
+  await openDialogHook("csvImport", {records});
 }
 function toggleImportRow(rowNum, on){
   if (on) IMPORT.accepted.add(rowNum); else IMPORT.accepted.delete(rowNum);
@@ -2279,7 +2284,11 @@ async function runImportCommit(){
     errEl.textContent = "No rows are selected to import.";
     return;
   }
-  const r = await api().import_csv_commit(records);
+  const context = {records};
+  const collected = await collectDialogHook("csvImport", context, errEl);
+  if (!collected.proceed) return;
+  const r = await callWithExtensionData(api().import_csv_commit.bind(api()), [records], collected.data);
+  await doneDialogHook("csvImport", r, context);
   if (!r) return;
   if (!r.ok){ errEl.textContent = r.error || "Couldn't import the file."; return; }
   IMPORT.imported = true;

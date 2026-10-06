@@ -364,11 +364,12 @@ class Api:
             self._conn, self.log, rows, mapping, extension_fields
         )
 
-    def import_csv_commit(self, records):
+    def import_csv_commit(self, records, extension_data=None):
         """Stage 3: import only the rows the user accepted, in a single
         transaction: all succeed or the whole import rolls back, so a
         half-import is impossible. Each row gets a fresh app-assigned log
-        number; an imported Log Number column is never honored."""
+        number; an imported Log Number column is never honored. The core
+        ignores extension_data."""
         return imports_service.import_csv_commit(
             self._conn, self.log, records, before_save=self._before_save
         )
