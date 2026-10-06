@@ -42,6 +42,8 @@ export default async function restore(helpers) {
     .then(() => true).catch(() => false);
   const doneText = await evaluate("document.getElementById('restore-done-note').textContent || document.getElementById('restore-err').textContent");
   check("the restore completes", done, doneText);
+  const toast = await evaluate("(() => { const t = document.getElementById('toast'); return t.style.display + '|' + t.textContent; })()");
+  check("a successful restore shows no error banner", !toast.startsWith("block"), toast);
   await screenshot("restore-done");
   await click("#restoreOkBtn");
 

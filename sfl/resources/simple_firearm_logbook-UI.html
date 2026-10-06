@@ -342,13 +342,14 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
 .import-status.error { background:color-mix(in srgb, var(--red) 18%, transparent); color:var(--red); }
 .import-reason { color:var(--text-dim); font-size:11.5px; margin-top:2px; }
 
-/* ---- toast (in-theme error banner, never a native alert) ---- */
+/* ---- toast (in-theme banner, never a native alert): red for errors, .info for notices ---- */
 .toast {
   position:fixed; bottom:60px; left:50%; transform:translateX(-50%); z-index:100;
   background:var(--panel-2); border:1px solid color-mix(in srgb, var(--red) 45%, var(--border-2));
   color:var(--red); font-size:12.5px; padding:9px 18px; border-radius:var(--radius-sm);
   box-shadow:0 10px 30px rgba(0,0,0,.4); display:none;
 }
+.toast.info { border-color:var(--border-2); color:var(--text); }
 
 /* ---- bottom bar ---- */
 /* equal side columns keep the update notice on the window's true center,
@@ -996,9 +997,10 @@ function $(id){ return document.getElementById(id); }
 function api(){ return window.pywebview && window.pywebview.api; }
 function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 let toastTimer = null;
-function showToast(msg){
+function showToast(msg, info){
   const el = $("toast");
   el.textContent = msg;
+  el.classList.toggle("info", !!info);
   el.style.display = "block";
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { el.style.display = "none"; }, 4500);
@@ -1862,7 +1864,7 @@ async function openAttachment(attachmentId){
   const r = await api().open_attachment(attachmentId);
   if (!r) return;
   if (r.ok){
-    if (r.revealed) showToast("No app is set for that file type. Opened its folder instead.");
+    if (r.revealed) showToast("No app is set for that file type. Opened its folder instead.", true);
     return;
   }
   if (r.missing){
@@ -1933,7 +1935,7 @@ async function saveAttachmentCopyBeforeDelete(){
     showToast(r.error || "Couldn't save a copy.");
     return;
   }
-  showToast(r.path ? `Saved a copy to ${r.path}` : "Saved a copy.");
+  showToast(r.path ? `Saved a copy to ${r.path}` : "Saved a copy.", true);
 }
 async function confirmDeleteAttachment(){
   if (!api() || !pendingDeleteAttachmentId) { closeDeleteAttachmentModal(); return; }
@@ -2294,7 +2296,6 @@ async function runImportCommit(){
   $("importNextBtn").style.display = "none";
   $("importCommitBtn").style.display = "none";
   $("importOkBtn").style.display = "";
-  showToast(`Imported ${r.imported} firearm(s).`);
   emitExtensionEvent("recordChanged", {id:null, action:"imported"});
 }
 
@@ -2427,7 +2428,6 @@ async function doRestoreCommit(){
   $("restorePickBtn").style.display = "none";
   $("restoreProceedBtn").style.display = "none";
   $("restoreOkBtn").style.display = "";
-  showToast("Restore complete.");
   emitExtensionEvent("recordChanged", {id:null, action:"restored"});
 }
 
