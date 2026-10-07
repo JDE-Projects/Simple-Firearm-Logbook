@@ -14,6 +14,11 @@
       "fixture": "tools/ui_check/fixture_restore.py",
       "timeout_s": 120
     },
+    "csv-import": {
+      "script": "tools/ui_check/csv_import.js",
+      "fixture": "tools/ui_check/fixture_csv_import.py",
+      "timeout_s": 120
+    },
     "restore-close": {
       "script": "tools/ui_check/restore_close.js",
       "fixture": "tools/ui_check/fixture_restore.py",
