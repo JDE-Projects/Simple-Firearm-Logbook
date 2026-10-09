@@ -3,6 +3,7 @@ helpers shared by every service that reads a firearms row."""
 import sqlite3
 
 from sfl.config import PRO_APPLICATION_ID, SCHEMA_VERSION
+from sfl import storage
 
 
 class NewerSchemaError(Exception):
@@ -34,11 +35,21 @@ def open_db(path: str, schema_version=SCHEMA_VERSION) -> sqlite3.Connection:
     conn = sqlite3.connect(path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    try:
+        ensure_schema(conn, schema_version)
+    except Exception:
+        conn.close()
+        raise
+    return conn
+
+
+def ensure_schema(conn, schema_version=SCHEMA_VERSION) -> None:
+    """Create or add to the schema on an open connection, refusing newer versions.
+    The connection must use sqlite3.Row as its row factory."""
 
     existing_version = conn.execute("PRAGMA user_version").fetchone()[0]
     if existing_version > schema_version:
         application_id = conn.execute("PRAGMA application_id").fetchone()[0]
-        conn.close()
         raise NewerSchemaError(
             f"Database schema {existing_version} is newer than this app supports ({schema_version}).",
             opened_by_pro=application_id == PRO_APPLICATION_ID,
@@ -115,8 +126,7 @@ def open_db(path: str, schema_version=SCHEMA_VERSION) -> sqlite3.Connection:
 
     if existing_version < SCHEMA_VERSION:
         conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
-    conn.commit()
-    return conn
+    storage.current().commit(conn)
 
 
 def _get_next_log_number(cur) -> str:

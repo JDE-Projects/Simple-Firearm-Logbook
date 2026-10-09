@@ -8,6 +8,7 @@ import zipfile
 import webview
 
 from sfl import config, paths
+from sfl import storage
 from sfl.csv_export import _build_csv_text
 from sfl.db import _firearm_row_to_dict
 from sfl.render_html import _build_full_report_html, _build_single_export_html
@@ -79,14 +80,17 @@ def _export_single_backup_zip_internal(conn, window, log, firearm_id):
             for p in photos:
                 full = paths._safe_photo_path(p["filename"])
                 if full and os.path.isfile(full):
-                    zf.write(full, arcname=os.path.basename(p["filename"]))
+                    zf.writestr(os.path.basename(p["filename"]), storage.current().read_bytes(full))
             # Attachments are always fully included, unlike photos: they're
             # the point of a backup. Kept in their own folder in the zip
             # rather than flattened, since two files can share a basename.
             for a in attachments:
                 full = paths._safe_attachment_path(a["filename"])
                 if full and os.path.isfile(full):
-                    zf.write(full, arcname=f"attachments/{os.path.basename(a['filename'])}")
+                    zf.writestr(
+                        f"attachments/{os.path.basename(a['filename'])}",
+                        storage.current().read_bytes(full),
+                    )
         log(f"Exported backup zip for firearm {f['log_number']}")
         return {"ok": True, "path": path}
     except Exception as e:
@@ -148,7 +152,7 @@ def export_full(conn, window, log, photo_depth="primary"):
                 full = paths._safe_photo_path(filename) if filename.startswith(config.PHOTOS_DIRNAME + "/") \
                     else paths._safe_attachment_path(filename)
                 if full and os.path.isfile(full):
-                    zf.write(full, arcname=filename.replace("\\", "/"))
+                    zf.writestr(filename.replace("\\", "/"), storage.current().read_bytes(full))
         log(f"Full export created, photo depth={photo_depth}, {len(firearms)} firearm(s)")
         return {"ok": True, "path": path}
     except Exception as e:
