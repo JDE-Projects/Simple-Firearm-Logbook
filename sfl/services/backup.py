@@ -6,13 +6,12 @@ window dependency, so it can be tested directly."""
 import datetime
 import json
 import os
-import sqlite3
-import tempfile
 import zipfile
 
 import webview
 
 from sfl import config, paths
+from sfl import storage
 from sfl.utils import sha256_hex
 
 
@@ -46,25 +45,12 @@ def _write_backup_zip(conn, dest_path, log):
     manifest.json inventory. No window dependency, so this is what tests
     call directly. Missing referenced files are recorded and logged, never
     silently dropped."""
-    tmp_db_path = None
     try:
         firearm_count = conn.execute("SELECT COUNT(*) FROM firearms").fetchone()[0]
         photo_rows = conn.execute("SELECT filename FROM photos").fetchall()
         attachment_rows = conn.execute("SELECT filename FROM attachments").fetchall()
 
-        # Safe DB copy: use SQLite's own backup API rather than a raw file
-        # copy, so a concurrently-open connection can't yield a corrupt copy.
-        tmp_fd, tmp_db_path = tempfile.mkstemp(suffix=".db", dir=tempfile.gettempdir())
-        os.close(tmp_fd)
-        dest_conn = None
-        try:
-            dest_conn = sqlite3.connect(tmp_db_path)
-            conn.backup(dest_conn)
-        finally:
-            if dest_conn is not None:
-                dest_conn.close()
-        with open(tmp_db_path, "rb") as fh:
-            db_bytes = fh.read()
+        db_bytes = storage.current().snapshot_db_bytes(conn)
 
         inventory = []
         missing = []
@@ -79,7 +65,8 @@ def _write_backup_zip(conn, dest_path, log):
         for row in attachment_rows:
             files_to_include.append((row["filename"], paths._safe_attachment_path(row["filename"])))
 
-        with zipfile.ZipFile(dest_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        with storage.current().open_backup_writer(dest_path) as writer, \
+                zipfile.ZipFile(writer, "w", zipfile.ZIP_DEFLATED) as zf:
             zf.writestr(db_arcname, db_bytes)
             for stored_filename, full in files_to_include:
                 if not full or not os.path.isfile(full):
@@ -87,9 +74,8 @@ def _write_backup_zip(conn, dest_path, log):
                     log(f"Backup: referenced file missing on disk: {stored_filename}")
                     continue
                 arcname = stored_filename.replace("\\", "/")
-                with open(full, "rb") as fh:
-                    file_bytes = fh.read()
-                zf.write(full, arcname=arcname)
+                file_bytes = storage.current().read_bytes(full)
+                zf.writestr(arcname, file_bytes)
                 inventory.append({
                     "path": arcname,
                     "size": len(file_bytes),
@@ -117,9 +103,3 @@ def _write_backup_zip(conn, dest_path, log):
     except Exception as e:
         log(f"_write_backup_zip failed: {e}")
         return {"ok": False, "error": "Couldn't create the backup."}
-    finally:
-        if tmp_db_path and os.path.exists(tmp_db_path):
-            try:
-                os.remove(tmp_db_path)
-            except Exception:
-                pass

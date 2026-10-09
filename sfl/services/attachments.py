@@ -1,12 +1,12 @@
 """Document attachments: verbatim file copies (never opened or recompressed)
 with an editable display label, plus rename/open/delete/save-a-copy."""
 import os
-import shutil
 import subprocess
 
 import webview
 
 from sfl import config, paths
+from sfl import storage
 
 
 def _get_attachments(conn, firearm_id) -> list:
@@ -104,9 +104,8 @@ def add_attachments(conn, log, firearm_id, source_paths):
             target_name = f"{row['log_number']}_{seq}{ext}"
             target_full = os.path.join(attachments_dir, target_name)
             try:
-                shutil.copy2(src, target_full)
+                size_bytes = storage.current().import_file(src, target_full)
                 written_paths.append(target_full)
-                size_bytes = os.path.getsize(target_full)
             except Exception as e:
                 # Never store a half-written file, and don't burn a
                 # sequence number on one that didn't make it in.
@@ -115,7 +114,7 @@ def add_attachments(conn, log, firearm_id, source_paths):
                 log(f"Attachment copy failed for {os.path.basename(src)}: {e}")
                 try:
                     if os.path.exists(target_full):
-                        os.remove(target_full)
+                        storage.current().remove(target_full)
                 except Exception:
                     pass
                 continue
@@ -126,7 +125,7 @@ def add_attachments(conn, log, firearm_id, source_paths):
                 (firearm_id, rel_name, label, seq, size_bytes),
             )
             added += 1
-        conn.commit()
+        storage.current().commit(conn)
         log(f"Added {added} attachment(s) to firearm {row['log_number']}"
             + (f", {failed} failed" if failed else ""))
         result = {"ok": True, "attachments": _get_attachments(conn, firearm_id), "added": added}
@@ -138,7 +137,7 @@ def add_attachments(conn, log, firearm_id, source_paths):
         conn.rollback()
         for p in written_paths if "written_paths" in locals() else []:
             try:
-                os.remove(p)
+                storage.current().remove(p)
             except Exception:
                 pass
         log(f"add_attachments failed: {e}")
@@ -154,7 +153,7 @@ def rename_attachment(conn, log, attachment_id, new_label):
         if not label:
             return {"ok": False, "error": "Enter a name."}
         conn.execute("UPDATE attachments SET label=? WHERE id=?", (label, attachment_id))
-        conn.commit()
+        storage.current().commit(conn)
         log(f"Renamed attachment {attachment_id}")
         return {"ok": True, "attachments": _get_attachments(conn, row["firearm_id"])}
     except Exception as e:
@@ -183,7 +182,7 @@ def open_attachment(conn, log, attachment_id):
                 "error": f'"{row["label"]}" is missing from the app\'s attachments folder.',
             }
         try:
-            os.startfile(full)
+            storage.current().open_external(full)
             log(f"Opened document {attachment_id}")
             return {"ok": True}
         except OSError:
@@ -205,11 +204,11 @@ def delete_attachment(conn, log, attachment_id):
         firearm_id = row["firearm_id"]
         full = paths._safe_attachment_path(row["filename"])
         conn.execute("DELETE FROM attachments WHERE id=?", (attachment_id,))
-        conn.commit()
+        storage.current().commit(conn)
         warning = None
         if full:
             try:
-                os.remove(full)
+                storage.current().remove(full)
             except Exception as e:
                 log(f"Deleted attachment {attachment_id}, but couldn't remove file {full}: {e}")
                 warning = (
@@ -260,7 +259,7 @@ def save_attachment_copy(conn, window, log, attachment_id):
         # rather than forcing a doubled "notes.txt.pdf".
         if ext and not os.path.splitext(path)[1]:
             path += ext
-        shutil.copy2(full, path)
+        storage.current().export_file(full, path)
         log(f"Saved a copy of attachment {attachment_id}")
         return {"ok": True, "path": path}
     except Exception as e:

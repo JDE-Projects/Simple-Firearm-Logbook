@@ -17,6 +17,7 @@ import zipfile
 import webview
 
 from sfl import config, paths
+from sfl import storage
 from sfl.utils import sha256_hex
 
 STAGING_PREFIX = "sfl_restore_"
@@ -60,11 +61,19 @@ def inspect_backup(zip_path, staging_dir, log, schema_version=config.SCHEMA_VERS
     this directly."""
     try:
         try:
-            with zipfile.ZipFile(zip_path) as zf:
+            with storage.current().open_backup_reader(zip_path) as reader, zipfile.ZipFile(reader) as zf:
+                members = []
                 for member in zf.infolist():
-                    if paths._safe_resolve_path(staging_dir, member.filename) is None:
+                    full = paths._safe_resolve_path(staging_dir, member.filename)
+                    if full is None:
                         return {"ok": False, "error": "That backup file looks corrupted or unsafe."}
-                zf.extractall(staging_dir)
+                    members.append((member, full))
+                for member, full in members:
+                    if member.is_dir():
+                        os.makedirs(full, exist_ok=True)
+                    else:
+                        os.makedirs(os.path.dirname(full), exist_ok=True)
+                        storage.current().write_bytes(full, zf.read(member))
         except zipfile.BadZipFile:
             return {"ok": False, "error": "That doesn't look like a valid backup file."}
         except Exception as e:
@@ -73,8 +82,7 @@ def inspect_backup(zip_path, staging_dir, log, schema_version=config.SCHEMA_VERS
 
         manifest_path = os.path.join(staging_dir, "manifest.json")
         try:
-            with open(manifest_path, "r", encoding="utf-8") as fh:
-                manifest = json.load(fh)
+            manifest = json.loads(storage.current().read_bytes(manifest_path).decode("utf-8"))
         except Exception as e:
             log(f"inspect_backup manifest read failed: {e}")
             return {"ok": False, "error": "That backup file is missing its manifest."}
@@ -105,8 +113,7 @@ def inspect_backup(zip_path, staging_dir, log, schema_version=config.SCHEMA_VERS
             is_db = entry_path == db_arcname
             entry_ok = os.path.isfile(full)
             if entry_ok:
-                with open(full, "rb") as fh:
-                    actual_hash = sha256_hex(fh.read())
+                actual_hash = sha256_hex(storage.current().read_bytes(full))
                 entry_ok = actual_hash == entry.get("sha256")
             if not entry_ok:
                 if is_db:
@@ -126,12 +133,12 @@ def inspect_backup(zip_path, staging_dir, log, schema_version=config.SCHEMA_VERS
                     # absent from the zip is already fine as-is.
                     if os.path.isfile(full):
                         try:
-                            os.remove(full)
+                            storage.current().remove(full)
                         except Exception as e:
                             log(f"inspect_backup: couldn't remove flagged staged file {entry_path}: {e}")
 
         # A backup with no database is unusable and must never restore: guard
-        # the file's existence explicitly, because sqlite3.connect below would
+        # the file's existence explicitly, because opening it below would
         # otherwise CREATE an empty database at that path and let a tampered
         # backup (one whose manifest never listed the db) replace the live
         # logbook with nothing.
@@ -148,7 +155,7 @@ def inspect_backup(zip_path, staging_dir, log, schema_version=config.SCHEMA_VERS
         if integrity_ok and os.path.isfile(db_full):
             if _sqlite_opens_cleanly(db_full, log, "inspect_backup"):
                 try:
-                    test_conn = sqlite3.connect(db_full)
+                    test_conn = storage.current().connect_file(db_full)
                     try:
                         db_version = test_conn.execute("PRAGMA user_version").fetchone()[0]
                         pro_database = (
@@ -260,7 +267,7 @@ def restore_commit(staging_dir, log):
 
     counts = {}
     try:
-        conn = sqlite3.connect(live_db)
+        conn = storage.current().connect_file(live_db)
         try:
             counts = {
                 "firearms": conn.execute("SELECT COUNT(*) FROM firearms").fetchone()[0],
@@ -282,7 +289,7 @@ def _sqlite_opens_cleanly(db_path, log, context):
     opened cleanly, False if sqlite3.DatabaseError was raised (logged via
     log, tagged with context so the caller's log line is identifiable)."""
     try:
-        conn = sqlite3.connect(db_path)
+        conn = storage.current().connect_file(db_path)
         try:
             conn.execute("SELECT count(*) FROM sqlite_master")
         finally:

@@ -16,6 +16,7 @@ from sfl.images import (
     optimize_image_to_jpeg,
     photo_failure_warning,
 )
+from sfl import storage
 
 
 def _get_photos(conn, firearm_id) -> list:
@@ -34,8 +35,7 @@ def _photo_with_data(p: dict) -> dict:
     if not full or not os.path.isfile(full):
         return {**p, "data_uri": None}
     try:
-        with open(full, "rb") as fh:
-            data = fh.read()
+        data = storage.current().read_bytes(full)
         mime = _sniff_image_mime(data)
         b64 = base64.b64encode(data).decode("ascii")
         return {**p, "data_uri": f"data:{mime};base64,{b64}"}
@@ -97,7 +97,7 @@ def _import_photo_sources(firearm_id, row, cur, seq, has_primary, sources, writt
         target_name = f"{row['log_number']}_{seq}.jpg"
         target_full = os.path.join(photos_dir, target_name)
         try:
-            optimize_image_to_jpeg(source["opener"], target_full)
+            storage.current().write_bytes(target_full, optimize_image_to_jpeg(source["opener"]))
         except Exception as e:
             # Never store a broken or half-written photo, and don't burn
             # a sequence number on one that didn't make it in.
@@ -107,7 +107,7 @@ def _import_photo_sources(firearm_id, row, cur, seq, has_primary, sources, writt
             log(f"Photo optimize failed for {os.path.basename(label)}: {e}")
             try:
                 if os.path.exists(target_full):
-                    os.remove(target_full)
+                    storage.current().remove(target_full)
             except Exception:
                 pass
             continue
@@ -180,7 +180,7 @@ def add_photos(conn, window, log, firearm_id):
         added, failed, seq, has_primary, fail_counts = _import_photo_sources(
             firearm_id, row, cur, seq, has_primary, sources, written_paths, log
         )
-        conn.commit()
+        storage.current().commit(conn)
         log(f"Added {added} photo(s) to firearm {row['log_number']}"
             + (f", {failed} failed" if failed else ""))
         return _photo_import_result(conn, firearm_id, added, fail_counts)
@@ -188,7 +188,7 @@ def add_photos(conn, window, log, firearm_id):
         conn.rollback()
         for p in written_paths:
             try:
-                os.remove(p)
+                storage.current().remove(p)
             except Exception:
                 pass
         log(f"add_photos failed: {e}")
@@ -261,7 +261,7 @@ def add_photos_from_data(conn, log, firearm_id, files):
         added, failed, seq, has_primary, fail_counts = _import_photo_sources(
             firearm_id, row, cur, seq, has_primary, sources, written_paths, log
         )
-        conn.commit()
+        storage.current().commit(conn)
         log(f"Added {added} photo(s) to firearm {row['log_number']}"
             + (f", {failed} failed" if failed else ""))
         return _photo_import_result(conn, firearm_id, added, fail_counts)
@@ -269,7 +269,7 @@ def add_photos_from_data(conn, log, firearm_id, files):
         conn.rollback()
         for p in written_paths:
             try:
-                os.remove(p)
+                storage.current().remove(p)
             except Exception:
                 pass
         log(f"add_photos_from_data failed: {e}")
@@ -292,11 +292,11 @@ def delete_photo(conn, log, photo_id):
             ).fetchone()
             if nxt:
                 cur.execute("UPDATE photos SET is_primary=1 WHERE id=?", (nxt["id"],))
-        conn.commit()
+        storage.current().commit(conn)
         warning = None
         if full:
             try:
-                os.remove(full)
+                storage.current().remove(full)
             except Exception as e:
                 log(f"Deleted photo {photo_id}, but couldn't remove file {full}: {e}")
                 warning = (
@@ -323,7 +323,7 @@ def set_primary_photo(conn, log, photo_id):
         cur = conn.cursor()
         cur.execute("UPDATE photos SET is_primary=0 WHERE firearm_id=?", (firearm_id,))
         cur.execute("UPDATE photos SET is_primary=1 WHERE id=?", (photo_id,))
-        conn.commit()
+        storage.current().commit(conn)
         log(f"Primary photo set for firearm {firearm_id}")
         return {"ok": True, "photos": _get_photos(conn, firearm_id)}
     except Exception as e:
@@ -341,8 +341,7 @@ def get_photo_data(log, filename):
         full = paths._safe_photo_path(filename)
         if not full or not os.path.isfile(full):
             return {"ok": False, "error": "That photo file is missing."}
-        with open(full, "rb") as f:
-            data = f.read()
+        data = storage.current().read_bytes(full)
         mime = _sniff_image_mime(data)
         b64 = base64.b64encode(data).decode("ascii")
         return {"ok": True, "data_uri": f"data:{mime};base64,{b64}"}

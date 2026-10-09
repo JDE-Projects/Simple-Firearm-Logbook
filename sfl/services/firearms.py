@@ -6,6 +6,7 @@ import datetime
 import os
 
 from sfl import config, paths
+from sfl import storage
 from sfl.db import SaveRejected, _firearm_row_to_dict, _get_next_log_number
 from sfl.services import attachments as attachments_service
 from sfl.services import photos as photos_service
@@ -157,7 +158,7 @@ def create_firearm(conn, log, make, model, serial_number="", firearm_type="", ca
             new = _firearm_row_to_dict(cur.execute("SELECT * FROM firearms WHERE id=?", (new_id,)).fetchone())
             before_save(cur, {"action": "created", "firearm_id": new_id, "old": None, "new": new,
                               "extension_data": extension_data})
-        conn.commit()
+        storage.current().commit(conn)
         log(f"Firearm {log_number} created")
         return {"ok": True, "firearm_id": new_id, "log_number": log_number}
     except SaveRejected as e:
@@ -242,7 +243,7 @@ def update_firearm(conn, log, firearm_id, make, model, serial_number="", firearm
             before_save(cur, {"action": "updated", "firearm_id": firearm_id,
                               "old": _firearm_row_to_dict(row), "new": new,
                               "extension_data": extension_data})
-        conn.commit()
+        storage.current().commit(conn)
         log(f"Firearm {row['log_number']} updated")
         return {"ok": True}
     except SaveRejected as e:
@@ -296,7 +297,7 @@ def update_disposition(conn, log, firearm_id, status, date="", to="", address=""
             before_save(cur, {"action": "disposition", "firearm_id": firearm_id,
                               "old": _firearm_row_to_dict(row), "new": new,
                               "extension_data": extension_data})
-        conn.commit()
+        storage.current().commit(conn)
         log(f"Disposition for firearm {row['log_number']} set to {status_s}")
         return {"ok": True}
     except SaveRejected as e:
@@ -342,20 +343,20 @@ def delete_firearm(conn, window, log, firearm_id, export_backup_first=False, ext
         # rows must go before the firearm row, same as photos.
         cur.execute("DELETE FROM attachments WHERE firearm_id=?", (firearm_id,))
         cur.execute("DELETE FROM firearms WHERE id=?", (firearm_id,))
-        conn.commit()
+        storage.current().commit(conn)
         failed_paths = []
         for p in photos:
             full = paths._safe_photo_path(p["filename"])
             if full:
                 try:
-                    os.remove(full)
+                    storage.current().remove(full)
                 except Exception:
                     failed_paths.append(full)
         for a in attachments:
             full = paths._safe_attachment_path(a["filename"])
             if full:
                 try:
-                    os.remove(full)
+                    storage.current().remove(full)
                 except Exception:
                     failed_paths.append(full)
         log(f"Firearm {row['log_number']} deleted")

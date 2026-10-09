@@ -1,6 +1,7 @@
 """Photo handling: decompression-bomb size guards, mime sniffing, the
 import-time re-encode to JPEG, and the shared wording for photos refused
 during import."""
+import io
 import os
 
 from PIL import Image, ImageOps
@@ -56,18 +57,17 @@ def _sniff_image_mime(data: bytes) -> str:
     return "image/jpeg"
 
 
-def optimize_image_to_jpeg(src: str, target: str, max_edge: int = config.PHOTO_MAX_EDGE,
-                           quality: int = config.PHOTO_JPEG_QUALITY) -> None:
+def optimize_image_to_jpeg(src: str, max_edge: int = config.PHOTO_MAX_EDGE,
+                           quality: int = config.PHOTO_JPEG_QUALITY) -> bytes:
     """Read an image, apply its stored EXIF rotation, scale the long edge down
-    to max_edge if it is larger, and write the result to target as a JPEG.
+    to max_edge if it is larger, and return the result as JPEG bytes.
 
     src may be a path or a file-like object (e.g. io.BytesIO), since PIL's
-    Image.open accepts either. target is always a path.
+    Image.open accepts either.
 
-    Never reads or writes anything but src (read) and target (write), so the
-    user's original is always safe. Raises on any failure (unreadable file,
-    unsupported data, write error) so the caller can refuse to store a broken
-    or oversized photo rather than pretend the import worked.
+    Raises on any failure (unreadable file or unsupported data) so the caller
+    can refuse to store a broken or oversized photo rather than pretend the
+    import worked.
     """
     with Image.open(src) as opened:
         # Honor the orientation a phone camera records in EXIF, so a photo that
@@ -88,7 +88,9 @@ def optimize_image_to_jpeg(src: str, target: str, max_edge: int = config.PHOTO_M
             new_size = (max(1, round(img.size[0] * scale)),
                         max(1, round(img.size[1] * scale)))
             img = img.resize(new_size, Image.LANCZOS)
-        img.save(target, "JPEG", quality=quality)
+        output = io.BytesIO()
+        img.save(output, "JPEG", quality=quality)
+        return output.getvalue()
 
 
 # Wording for each refusal reason, used by photo_failure_warning below.

@@ -2,6 +2,7 @@
 transaction. Thin wrappers around sfl.csv_import's pure parsing/validation
 functions that add the file picker, the database, and the transaction."""
 from sfl import csv_import
+from sfl import storage
 from sfl.config import IMPORT_FIELDS
 from sfl.db import SaveRejected, _firearm_row_to_dict
 
@@ -89,7 +90,7 @@ def import_csv_commit(conn, log, records, before_save=None):
                 before_save(cur, {"action": "imported", "firearm_id": firearm_id, "old": None,
                                   "new": new,
                                   "extension_data": record.get("extension_data")})
-        conn.commit()
+        storage.current().commit(conn)
         log(f"CSV import committed, {len(imported)} firearm(s)")
         return {"ok": True, "imported": len(imported), "log_numbers": imported}
     except SaveRejected as e:

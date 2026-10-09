@@ -3,7 +3,7 @@ import ctypes
 import os
 import sys
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import webview
 
@@ -13,6 +13,7 @@ from sfl.db import NewerSchemaError, open_db
 from sfl.paths import app_dir, resource_path
 from sfl.remote_debug import strip_remote_debugging
 from sfl.services import restore as restore_service
+from sfl.storage import Storage, install as install_storage
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,7 @@ class AppDescription:
     extension_script: str | None = None
     extension_stylesheet: str | None = None
     import_extension_fields: tuple = ()
+    storage: Storage = field(default_factory=Storage)
 
 
 DEFAULT_APP_DESCRIPTION = AppDescription(
@@ -52,6 +54,7 @@ def run(description: AppDescription | None = None) -> None:
     os.environ.setdefault("QT_DISABLE_SHADER_DISK_CACHE", "1")
     strip_remote_debugging(os.environ, sys.argv, getattr(sys, "frozen", False))
     description = description or DEFAULT_APP_DESCRIPTION
+    install_storage(description.storage)
     config.APP_VERSION = description.version
     config.GITHUB_OWNER = description.update_owner
     config.GITHUB_REPO = description.update_repo
