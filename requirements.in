@@ -3,7 +3,7 @@
 # from this file with uv 0.12.17 and must never be edited by hand:
 #   uv pip compile --python-platform x86_64-pc-windows-msvc --generate-hashes --python-version 3.14 requirements.in -o requirements.txt
 pywebview==6.2.1
-PySide6==6.12.0
+PySide6==6.11.2
 qtpy==2.4.3
 pyinstaller==6.22.3
 # truststore routes TLS through the Windows certificate store (see sxt-build-ship).
