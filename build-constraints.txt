@@ -5,4 +5,4 @@
 # outside the hash-locked list, so this file pins its version instead. Both
 # the tool's build bat and the reusable workflows pass it to pip with
 # --build-constraint. Keep it at the setuptools version in the tool's lock.
-setuptools==84.0.0
+setuptools==84.1.0
