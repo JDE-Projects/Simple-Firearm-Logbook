@@ -60,6 +60,30 @@ def test_output_is_always_jpeg(tmp_path):
         assert result.format == "JPEG"
 
 
+@pytest.mark.parametrize("source_format, extension", [
+    ("JPEG", "jpg"),
+    ("PNG", "png"),
+    ("GIF", "gif"),
+    ("BMP", "bmp"),
+    ("WEBP", "webp"),
+    ("TIFF", "tiff"),
+])
+def test_each_accepted_format_is_optimized_to_jpeg(tmp_path, source_format, extension):
+    src = tmp_path / f"source.{extension}"
+    Image.new("RGB", (20, 10), (120, 60, 30)).save(src, source_format)
+
+    with Image.open(io.BytesIO(app.optimize_image_to_jpeg(str(src)))) as result:
+        assert result.format == "JPEG"
+
+
+def test_refused_format_is_rejected_even_with_a_jpg_name(tmp_path):
+    src = tmp_path / "disguised.jpg"
+    Image.new("RGB", (20, 10), (120, 60, 30)).save(src, "ICO")
+
+    with pytest.raises(UnidentifiedImageError):
+        app.optimize_image_to_jpeg(str(src))
+
+
 def test_transparency_is_flattened_without_error(tmp_path):
     src = str(tmp_path / "alpha.png")
     # A semi-transparent RGBA image would make JPEG choke if not flattened.

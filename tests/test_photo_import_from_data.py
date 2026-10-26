@@ -119,6 +119,25 @@ def test_undecodable_image_bytes_are_rejected_and_counted_as_failed(tmp_path, mo
         api.close_conn()
 
 
+def test_disguised_refused_format_is_damaged_and_not_stored(tmp_path, monkeypatch):
+    api = _api(tmp_path, monkeypatch)
+    try:
+        fid = api.create_firearm("Glock", "19")["firearm_id"]
+        image = Image.new("RGB", (20, 10), (120, 60, 30))
+        data = io.BytesIO()
+        image.save(data, "ICO")
+        encoded = base64.b64encode(data.getvalue()).decode("ascii")
+
+        r = api.add_photos_from_data(fid, [{"name": "disguised.jpg", "data": encoded}])
+
+        assert r["ok"], r
+        assert r["added"] == 0
+        assert r["photos"] == []
+        assert r["warning"] == "1 image was damaged and wasn't added."
+    finally:
+        api.close_conn()
+
+
 def test_first_photo_added_becomes_primary(tmp_path, monkeypatch):
     api = _api(tmp_path, monkeypatch)
     try:
