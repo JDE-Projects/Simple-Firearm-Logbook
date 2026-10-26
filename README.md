@@ -61,9 +61,7 @@ This release was built on GitHub from this public source, not on a personal
 machine, and is signed with a build-provenance attestation. To confirm your
 download is genuine, install the [GitHub CLI](https://cli.github.com) and run:
 ```
-gh attestation verify SimpleFirearmLogbook-vX.Y.Z.zip \
-  --repo JDE-Projects/Simple-Firearm-Logbook \
-  --signer-repo JDE-Projects/Build-Tools
+gh attestation verify SimpleFirearmLogbook-vX.Y.Z.zip --repo JDE-Projects/Simple-Firearm-Logbook --signer-repo JDE-Projects/Build-Tools
 ```
 A `Verification succeeded!` line means the file was built by the published
 pipeline from this repo. You can also check the file against the published
