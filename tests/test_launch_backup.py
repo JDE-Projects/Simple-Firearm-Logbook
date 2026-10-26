@@ -196,7 +196,8 @@ def test_five_good_backups_survive_a_later_damaged_launch(tmp_path):
 
     result = startup.prepare_database(FakeApi(), str(path), config.SCHEMA_VERSION)
 
-    assert result.outcome == "damaged"
+    assert result.outcome == "ready"
+    result.conn.close()
     assert _backup_names(path) == before
 
 

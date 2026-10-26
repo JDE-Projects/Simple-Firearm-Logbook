@@ -12,6 +12,7 @@ from sfl.api import Api
 from sfl.db import open_db
 from sfl.paths import app_dir, resource_path
 from sfl.remote_debug import strip_remote_debugging
+from sfl.services import launch_restore
 from sfl.storage import Storage, install as install_storage
 
 
@@ -100,6 +101,12 @@ def run(description: AppDescription | None = None) -> None:
             platform_win._show_database_unavailable_error(db_path, description.product_name)
         elif prepared.outcome == "damaged":
             platform_win._show_database_damaged_error(db_path, description.product_name)
+        elif prepared.outcome == "damaged_no_backup":
+            platform_win._show_damaged_no_backup_error(db_path, os.path.join(folder, config.BACKUPS_DIRNAME), description.product_name)
+        elif prepared.outcome == "restore_failed":
+            platform_win._show_restore_failed_error(db_path, description.product_name)
+        elif prepared.outcome == "restore_stopped":
+            platform_win._show_restore_stopped_error(folder, description.product_name)
         elif prepared.outcome == "encrypted":
             platform_win._show_encrypted_database_error(description.product_name)
         elif prepared.outcome == "pro_stamped":
@@ -115,6 +122,9 @@ def run(description: AppDescription | None = None) -> None:
         sys.exit(1)
 
     api.set_conn(prepared.conn)
+    if prepared.restore_notice is not None:
+        platform_win._show_restore_complete_info(prepared.restore_notice, description.product_name)
+        launch_restore.clear_record(api, db_path)
     for notice in prepared.notices:
         api.add_launch_notice(notice)
     win = webview.create_window(

@@ -110,7 +110,7 @@ def test_run_uses_custom_api_and_database_preparer_and_sets_config(monkeypatch, 
     def prepare_database(api, path, schema_version):
         calls["db_path"] = path
         calls["schema_version"] = schema_version
-        return startup.PreparedDatabase("ready", "connection", "test connection", ("launch warning",))
+        return startup.PreparedDatabase("ready", "connection", "test connection", ("launch warning",), "restored")
 
     description = launcher.AppDescription(
         product_name="Embedding Logbook",
@@ -134,9 +134,15 @@ def test_run_uses_custom_api_and_database_preparer_and_sets_config(monkeypatch, 
     monkeypatch.setattr(launcher.platform_win, "_restore_geometry", lambda win: None)
     monkeypatch.setattr(launcher.platform_win, "_save_geometry", lambda win: None)
     monkeypatch.setattr(
+        launcher.platform_win, "_show_restore_complete_info", lambda *args: calls.setdefault("order", []).append("notice")
+    )
+    monkeypatch.setattr(
+        launcher.launch_restore, "clear_record", lambda *args: calls.setdefault("order", []).append("clear_record")
+    )
+    monkeypatch.setattr(
         launcher.webview,
         "create_window",
-        lambda *args, **kwargs: calls.setdefault("window_args", (args, kwargs)) and FakeWindow(),
+        lambda *args, **kwargs: (calls.setdefault("window_args", (args, kwargs)), calls.setdefault("order", []).append("window"), FakeWindow())[-1],
     )
     monkeypatch.setattr(launcher.webview, "start", lambda **kwargs: calls.setdefault("start", kwargs))
 
@@ -152,7 +158,7 @@ def test_run_uses_custom_api_and_database_preparer_and_sets_config(monkeypatch, 
     assert calls["closed"] is True
     assert calls["pruned"] is True
     assert calls["notices"] == ["launch warning"]
-    assert calls["order"] == ["close_restore", "close_conn"]
+    assert calls["order"] == ["notice", "clear_record", "window", "close_restore", "close_conn"]
     assert config.APP_VERSION == "9.8.7"
     assert config.GITHUB_OWNER == "example-owner"
     assert config.GITHUB_REPO == "example-repo"
@@ -163,6 +169,9 @@ def test_run_uses_custom_api_and_database_preparer_and_sets_config(monkeypatch, 
     [
         ("unavailable", "_show_database_unavailable_error", ("Embedding Logbook",)),
         ("damaged", "_show_database_damaged_error", ("Embedding Logbook",)),
+        ("damaged_no_backup", "_show_damaged_no_backup_error", ("Embedding Logbook",)),
+        ("restore_failed", "_show_restore_failed_error", ("Embedding Logbook",)),
+        ("restore_stopped", "_show_restore_stopped_error", ("Embedding Logbook",)),
         ("encrypted", "_show_encrypted_database_error", ("Embedding Logbook",)),
         ("pro_stamped", "_show_newer_schema_error", ("Embedding Logbook", True)),
         ("newer", "_show_newer_schema_error", ("Embedding Logbook", False)),
@@ -194,10 +203,18 @@ def test_run_reports_non_ready_database_outcome(monkeypatch, tmp_path, outcome, 
         launcher.run(description)
 
     assert exited.value.code == 1
-    if outcome in {"unavailable", "damaged"}:
+    if outcome in {"unavailable", "damaged", "restore_failed"}:
         assert calls == [(os.path.join(str(tmp_path), config.DB_FILENAME), *message_args)]
     elif outcome == "upgrade_blocked":
         assert calls == [(os.path.join(str(tmp_path), config.BACKUPS_DIRNAME), *message_args)]
+    elif outcome == "damaged_no_backup":
+        assert calls == [(
+            os.path.join(str(tmp_path), config.DB_FILENAME),
+            os.path.join(str(tmp_path), config.BACKUPS_DIRNAME),
+            *message_args,
+        )]
+    elif outcome == "restore_stopped":
+        assert calls == [(str(tmp_path), *message_args)]
     else:
         assert calls == [message_args]
 

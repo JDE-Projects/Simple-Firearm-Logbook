@@ -1,5 +1,12 @@
 # Runtime user data (never commit)
 simple_firearm_logbook.db
+simple_firearm_logbook.db-journal
+simple_firearm_logbook.damaged-*.db
+simple_firearm_logbook.damaged-*.db-journal
+simple_firearm_logbook.restore.json
+simple_firearm_logbook.restore.json.tmp
+.sfl_launch_restore_*
+backups/
 photos/
 Debug_Log_*.txt
 *.pref
