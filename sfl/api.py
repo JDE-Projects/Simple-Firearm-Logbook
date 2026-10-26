@@ -29,6 +29,7 @@ class Api:
         self._conn = None
         self._debug_warning_lock = threading.Lock()
         self._debug_warnings = []
+        self._launch_notices = []
         self._page_loaded = False
         self._debug_log = DebugLog(
             paths.app_dir(),
@@ -52,8 +53,12 @@ class Api:
                 return
             warnings = self._debug_warnings
             self._debug_warnings = []
+            notices = self._launch_notices
+            self._launch_notices = []
         for message in warnings:
             self._show_debug_warning(window, message)
+        if notices:
+            self._show_launch_notice(window, " ".join(notices))
 
     def _show_debug_warning(self, window, message):
         # Send the log's real state with the warning, so a log that turned
@@ -71,6 +76,20 @@ class Api:
                 self._debug_warnings.append(message)
                 return
         self._show_debug_warning(window, message)
+
+    def _show_launch_notice(self, window, message):
+        try:
+            window.evaluate_js(f"showToast({json.dumps(message)});")
+        except Exception:  # noqa: BLE001, S110 - notice display is best effort.
+            pass
+
+    def add_launch_notice(self, message):
+        with self._debug_warning_lock:
+            window = self._window
+            if window is None or not self._page_loaded:
+                self._launch_notices.append(message)
+                return
+        self._show_launch_notice(window, message)
 
     def set_conn(self, conn: sqlite3.Connection):
         self._conn = conn

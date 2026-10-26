@@ -10,6 +10,7 @@ DB_FILENAME = "simple_firearm_logbook.db"
 LOCK_FILENAME = "simple_firearm_logbook.lock"
 PHOTOS_DIRNAME = "photos"
 ATTACHMENTS_DIRNAME = "attachments"
+BACKUPS_DIRNAME = "backups"
 SCHEMA_VERSION = 1
 # The SQLite application_id Simple Firearm Logbook Pro stamps on logbooks it opens.
 PRO_APPLICATION_ID = 0x53464C50

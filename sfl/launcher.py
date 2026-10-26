@@ -106,11 +106,17 @@ def run(description: AppDescription | None = None) -> None:
             platform_win._show_newer_schema_error(description.product_name, True)
         elif prepared.outcome == "newer":
             platform_win._show_newer_schema_error(description.product_name, False)
+        elif prepared.outcome == "upgrade_blocked":
+            platform_win._show_upgrade_blocked_error(
+                os.path.join(folder, config.BACKUPS_DIRNAME), description.product_name
+            )
         else:
             platform_win._show_database_unavailable_error(db_path, description.product_name)
         sys.exit(1)
 
     api.set_conn(prepared.conn)
+    for notice in prepared.notices:
+        api.add_launch_notice(notice)
     win = webview.create_window(
         description.product_name,
         url=resource_path("simple_firearm_logbook-UI.html"),

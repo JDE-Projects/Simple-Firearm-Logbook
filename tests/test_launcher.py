@@ -97,6 +97,9 @@ def test_run_uses_custom_api_and_database_preparer_and_sets_config(monkeypatch, 
         def flush_debug_warnings(self):
             calls["warnings_flushed"] = True
 
+        def add_launch_notice(self, message):
+            calls.setdefault("notices", []).append(message)
+
         def close_restore(self):
             calls.setdefault("order", []).append("close_restore")
 
@@ -107,7 +110,7 @@ def test_run_uses_custom_api_and_database_preparer_and_sets_config(monkeypatch, 
     def prepare_database(api, path, schema_version):
         calls["db_path"] = path
         calls["schema_version"] = schema_version
-        return startup.PreparedDatabase("ready", "connection", "test connection")
+        return startup.PreparedDatabase("ready", "connection", "test connection", ("launch warning",))
 
     description = launcher.AppDescription(
         product_name="Embedding Logbook",
@@ -148,6 +151,7 @@ def test_run_uses_custom_api_and_database_preparer_and_sets_config(monkeypatch, 
     assert calls["start"]["gui"] == "qt"
     assert calls["closed"] is True
     assert calls["pruned"] is True
+    assert calls["notices"] == ["launch warning"]
     assert calls["order"] == ["close_restore", "close_conn"]
     assert config.APP_VERSION == "9.8.7"
     assert config.GITHUB_OWNER == "example-owner"
@@ -162,6 +166,7 @@ def test_run_uses_custom_api_and_database_preparer_and_sets_config(monkeypatch, 
         ("encrypted", "_show_encrypted_database_error", ("Embedding Logbook",)),
         ("pro_stamped", "_show_newer_schema_error", ("Embedding Logbook", True)),
         ("newer", "_show_newer_schema_error", ("Embedding Logbook", False)),
+        ("upgrade_blocked", "_show_upgrade_blocked_error", ("Embedding Logbook",)),
     ],
 )
 def test_run_reports_non_ready_database_outcome(monkeypatch, tmp_path, outcome, message_name, message_args):
@@ -191,6 +196,8 @@ def test_run_reports_non_ready_database_outcome(monkeypatch, tmp_path, outcome, 
     assert exited.value.code == 1
     if outcome in {"unavailable", "damaged"}:
         assert calls == [(os.path.join(str(tmp_path), config.DB_FILENAME), *message_args)]
+    elif outcome == "upgrade_blocked":
+        assert calls == [(os.path.join(str(tmp_path), config.BACKUPS_DIRNAME), *message_args)]
     else:
         assert calls == [message_args]
 
