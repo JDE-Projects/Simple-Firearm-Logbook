@@ -13,17 +13,16 @@ another, and a rollback when the swap fails partway through.
 
 import json
 import os
-import shutil
 import sqlite3
 import zipfile
-from pathlib import Path
 
 import pytest
 
 import sfl.services.restore as restore_mod
 import simple_firearm_logbook as app
-from sfl import config, paths
+from sfl import config, paths, platform_win
 from sfl.services.backup import _write_backup_zip
+from sfl.services import zip_restore_recovery
 from sfl.services.restore import inspect_backup, restore_commit
 from sfl.utils import sha256_hex
 
@@ -259,6 +258,278 @@ def test_api_uses_description_schema_version_and_opener(tmp_path, monkeypatch):
     api.close_conn()
 
 
+def test_api_recovery_required_skips_reopen_and_survives_missing_or_broken_window(tmp_path, monkeypatch):
+    api = app.Api()
+    api._restore_staging = str(tmp_path / ".sfl_zip_restore_stage-a1b2c3d4")
+    api._window = None
+    shown = []
+    monkeypatch.setattr(paths, "app_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(restore_mod, "restore_commit", lambda staging, log: {"ok": False, "recovery_required": True})
+    monkeypatch.setattr(platform_win, "_show_zip_restore_recovery_required_error", lambda *args: shown.append(args))
+    monkeypatch.setattr(restore_mod, "discard_staging", lambda *args: None)
+    assert api.restore_commit()["recovery_required"] is True
+    assert shown == [(str(tmp_path), "Simple Firearm Logbook")]
+
+    class BrokenWindow:
+        def destroy(self):
+            raise RuntimeError("closed already")
+
+    api._restore_staging = str(tmp_path / ".sfl_zip_restore_stage-a1b2c3d4")
+    api._window = BrokenWindow()
+    assert api.restore_commit()["recovery_required"] is True
+
+
+def test_restore_commit_returns_success_when_swapped_cleanup_is_pending(tmp_path, monkeypatch):
+    live = tmp_path / "live"
+    live.mkdir()
+    monkeypatch.setattr(paths, "app_dir", lambda: str(live))
+    staging = live / ".sfl_zip_restore_stage-a1b2c3d4"
+    staging.mkdir()
+    _database = app.open_db
+    old = _database(str(live / config.DB_FILENAME))
+    _insert_firearm(old, "00001", "Old", "One")
+    old.commit()
+    old.close()
+    new = _database(str(staging / config.DB_FILENAME))
+    _insert_firearm(new, "00001", "New", "One")
+    new.commit()
+    new.close()
+    monkeypatch.setattr(zip_restore_recovery, "complete_swapped", lambda *args: "cleanup_pending")
+    result = restore_commit(str(staging), lambda _: None)
+    assert result["ok"] is True
+    assert result["counts"]["firearms"] == 1
+    assert os.path.exists(zip_restore_recovery.record_path(str(live)))
+
+
+def _crash_restore_tree(folder, monkeypatch, *, live_parts=("photos", "attachments"), staged_parts=("photos", "attachments"), journal=False):
+    monkeypatch.setattr(paths, "app_dir", lambda: str(folder))
+    staging = folder / ".sfl_zip_restore_stage-a1b2c3d4"
+    staging.mkdir()
+    for root, make in ((folder, "old"), (staging, "new")):
+        conn = app.open_db(str(root / config.DB_FILENAME))
+        _insert_firearm(conn, "00001", make, "model")
+        conn.commit()
+        conn.close()
+    for name, filename, contents in (("photos", "photo.jpg", b"photo"), ("attachments", "doc.pdf", b"document")):
+        dirname = config.PHOTOS_DIRNAME if name == "photos" else config.ATTACHMENTS_DIRNAME
+        if name in live_parts:
+            _make_file(folder / dirname / filename, b"old-" + contents)
+        if name in staged_parts:
+            _make_file(staging / dirname / filename, b"new-" + contents)
+    if journal:
+        (folder / (config.DB_FILENAME + "-journal")).write_bytes(b"old-journal")
+    return staging
+
+
+def _crash_restore_contents(folder):
+    conn = sqlite3.connect(folder / config.DB_FILENAME)
+    try:
+        make = conn.execute("SELECT make FROM firearms").fetchone()[0]
+    finally:
+        conn.close()
+    return (
+        make,
+        (folder / config.PHOTOS_DIRNAME / "photo.jpg").read_bytes(),
+        (folder / config.ATTACHMENTS_DIRNAME / "doc.pdf").read_bytes(),
+    )
+
+
+@pytest.mark.parametrize("move_number", range(1, 7))
+def test_commit_crash_after_each_move_leaves_old_or_new_set(tmp_path, monkeypatch, move_number):
+    staging = _crash_restore_tree(tmp_path, monkeypatch)
+    original_replace = os.replace
+    moves = 0
+
+    def crash_after_move(source, destination, *args, **kwargs):
+        nonlocal moves
+        result = original_replace(source, destination, *args, **kwargs)
+        if os.path.basename(str(source)) in {config.DB_FILENAME, config.PHOTOS_DIRNAME, config.ATTACHMENTS_DIRNAME}:
+            moves += 1
+            if moves == move_number:
+                raise KeyboardInterrupt
+        return result
+
+    monkeypatch.setattr(restore_mod.os, "replace", crash_after_move)
+    with pytest.raises(KeyboardInterrupt):
+        restore_commit(str(staging), lambda _: None)
+    monkeypatch.setattr(restore_mod.os, "replace", original_replace)
+
+    assert zip_restore_recovery.recover(str(tmp_path), lambda _: None) == "undone"
+    assert _crash_restore_contents(tmp_path) == ("old", b"old-photo", b"old-document")
+    assert not staging.exists()
+    assert not list(tmp_path.glob(".sfl_zip_restore_aside-*"))
+    assert not os.path.exists(zip_restore_recovery.record_path(str(tmp_path)))
+
+
+def test_commit_crash_after_swapped_record_leaves_new_set(tmp_path, monkeypatch):
+    staging = _crash_restore_tree(tmp_path, monkeypatch)
+    original_write_record = zip_restore_recovery.write_record
+
+    def crash_after_swapped(folder, record):
+        original_write_record(folder, record)
+        if record["stage"] == "swapped":
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(zip_restore_recovery, "write_record", crash_after_swapped)
+    with pytest.raises(KeyboardInterrupt):
+        restore_commit(str(staging), lambda _: None)
+    monkeypatch.setattr(zip_restore_recovery, "write_record", original_write_record)
+
+    assert zip_restore_recovery.recover(str(tmp_path), lambda _: None) == "finished"
+    assert _crash_restore_contents(tmp_path) == ("new", b"new-photo", b"new-document")
+    assert not staging.exists()
+    assert not list(tmp_path.glob(".sfl_zip_restore_aside-*"))
+    assert not os.path.exists(zip_restore_recovery.record_path(str(tmp_path)))
+
+
+@pytest.mark.parametrize("after_write", [False, True])
+def test_commit_crash_while_writing_prepared_record(tmp_path, monkeypatch, after_write):
+    staging = _crash_restore_tree(tmp_path, monkeypatch)
+    original_replace = os.replace
+    record = zip_restore_recovery.record_path(str(tmp_path))
+
+    def crash_writing_record(source, destination, *args, **kwargs):
+        if str(destination) == record and not after_write:
+            raise KeyboardInterrupt
+        result = original_replace(source, destination, *args, **kwargs)
+        if str(destination) == record and after_write:
+            raise KeyboardInterrupt
+        return result
+
+    monkeypatch.setattr(restore_mod.os, "replace", crash_writing_record)
+    with pytest.raises(KeyboardInterrupt):
+        restore_commit(str(staging), lambda _: None)
+    monkeypatch.setattr(restore_mod.os, "replace", original_replace)
+
+    expected = "undone" if after_write else "none"
+    assert zip_restore_recovery.recover(str(tmp_path), lambda _: None) == expected
+    assert _crash_restore_contents(tmp_path) == ("old", b"old-photo", b"old-document")
+
+
+def test_backup_adds_a_part_the_logbook_lacked(tmp_path, monkeypatch):
+    staging = _crash_restore_tree(tmp_path, monkeypatch, live_parts=("photos",))
+    original_replace = os.replace
+
+    def crash_after_attachments_move(source, destination, *args, **kwargs):
+        result = original_replace(source, destination, *args, **kwargs)
+        if os.path.basename(str(source)) == config.ATTACHMENTS_DIRNAME and str(source).startswith(str(staging)):
+            raise KeyboardInterrupt
+        return result
+
+    monkeypatch.setattr(restore_mod.os, "replace", crash_after_attachments_move)
+    with pytest.raises(KeyboardInterrupt):
+        restore_commit(str(staging), lambda _: None)
+    monkeypatch.setattr(restore_mod.os, "replace", original_replace)
+
+    original_delete = zip_restore_recovery._delete
+
+    def check_rollback_before_staging_cleanup(path):
+        if str(path) == str(staging) and (staging / config.ATTACHMENTS_DIRNAME).exists():
+            assert zip_restore_recovery.read_record(str(tmp_path))["stage"] == "rolled_back"
+        return original_delete(path)
+
+    monkeypatch.setattr(zip_restore_recovery, "_delete", check_rollback_before_staging_cleanup)
+    assert zip_restore_recovery.recover(str(tmp_path), lambda _: None) == "undone"
+    assert not (tmp_path / config.ATTACHMENTS_DIRNAME).exists()
+    assert not staging.exists()
+
+
+def test_backup_lacks_a_part_the_logbook_had(tmp_path, monkeypatch):
+    complete = tmp_path / "complete"
+    complete.mkdir()
+    staging = _crash_restore_tree(complete, monkeypatch, staged_parts=("attachments",))
+    assert restore_commit(str(staging), lambda _: None)["ok"]
+    assert not (complete / config.PHOTOS_DIRNAME).exists()
+
+    interrupted = tmp_path / "interrupted"
+    interrupted.mkdir()
+    staging = _crash_restore_tree(interrupted, monkeypatch, staged_parts=("attachments",))
+    original_replace = os.replace
+
+    def crash_after_live_photos_aside(source, destination, *args, **kwargs):
+        result = original_replace(source, destination, *args, **kwargs)
+        if os.path.basename(str(source)) == config.PHOTOS_DIRNAME and "sfl_zip_restore_aside-" in str(destination):
+            raise KeyboardInterrupt
+        return result
+
+    monkeypatch.setattr(restore_mod.os, "replace", crash_after_live_photos_aside)
+    with pytest.raises(KeyboardInterrupt):
+        restore_commit(str(staging), lambda _: None)
+    monkeypatch.setattr(restore_mod.os, "replace", original_replace)
+    assert zip_restore_recovery.recover(str(interrupted), lambda _: None) == "undone"
+    assert (interrupted / config.PHOTOS_DIRNAME / "photo.jpg").read_bytes() == b"old-photo"
+
+
+def test_leftover_journal_moves_with_the_database(tmp_path, monkeypatch):
+    complete = tmp_path / "complete"
+    complete.mkdir()
+    staging = _crash_restore_tree(complete, monkeypatch, journal=True)
+    assert restore_commit(str(staging), lambda _: None)["ok"]
+    assert not (complete / (config.DB_FILENAME + "-journal")).exists()
+
+    interrupted = tmp_path / "interrupted"
+    interrupted.mkdir()
+    staging = _crash_restore_tree(interrupted, monkeypatch, journal=True)
+    original_replace = os.replace
+
+    def crash_after_journal_aside(source, destination, *args, **kwargs):
+        result = original_replace(source, destination, *args, **kwargs)
+        if os.path.basename(str(source)) == config.DB_FILENAME + "-journal":
+            raise KeyboardInterrupt
+        return result
+
+    monkeypatch.setattr(restore_mod.os, "replace", crash_after_journal_aside)
+    with pytest.raises(KeyboardInterrupt):
+        restore_commit(str(staging), lambda _: None)
+    monkeypatch.setattr(restore_mod.os, "replace", original_replace)
+    assert zip_restore_recovery.recover(str(interrupted), lambda _: None) == "undone"
+    assert (interrupted / (config.DB_FILENAME + "-journal")).read_bytes() == b"old-journal"
+
+
+def test_commit_undo_with_failed_cleanup_reports_unchanged(tmp_path, monkeypatch):
+    staging = _crash_restore_tree(tmp_path, monkeypatch)
+    original_replace = os.replace
+
+    def fail_database_move_in(source, destination, *args, **kwargs):
+        if str(source) == str(staging / config.DB_FILENAME):
+            raise OSError("simulated move-in failure")
+        return original_replace(source, destination, *args, **kwargs)
+
+    monkeypatch.setattr(restore_mod.os, "replace", fail_database_move_in)
+    monkeypatch.setattr(zip_restore_recovery, "_delete", lambda path: False)
+    result = restore_commit(str(staging), lambda _: None)
+    monkeypatch.undo()
+
+    assert result.get("recovery_required") is not True
+    assert "not changed" in result["error"]
+    assert _crash_restore_contents(tmp_path) == ("old", b"old-photo", b"old-document")
+    assert zip_restore_recovery.read_record(str(tmp_path))["stage"] == "rolled_back"
+    assert zip_restore_recovery.recover(str(tmp_path), lambda _: None) == "undone"
+    assert not staging.exists()
+
+
+def test_api_finally_keeps_a_recorded_staging_folder(tmp_path, monkeypatch):
+    staging = tmp_path / ".sfl_zip_restore_stage-a1b2c3d4"
+    staging.mkdir()
+    aside = tmp_path / ".sfl_zip_restore_aside-a1b2c3d4"
+    aside.mkdir()
+    record = zip_restore_recovery.make_record(str(tmp_path), str(staging))
+    zip_restore_recovery.write_record(str(tmp_path), record)
+    api = app.Api()
+    api._restore_staging = str(staging)
+    monkeypatch.setattr(paths, "app_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(restore_mod, "restore_commit", lambda staging, log: {"ok": False, "recovery_required": True})
+    monkeypatch.setattr(platform_win, "_show_zip_restore_recovery_required_error", lambda *args: None)
+    assert api.restore_commit()["recovery_required"] is True
+    assert staging.exists()
+
+    preview = tmp_path / ".sfl_zip_restore_stage-b1c2d3e4"
+    preview.mkdir()
+    api._restore_staging = str(preview)
+    assert api.restore_cancel() == {"ok": True}
+    assert not preview.exists()
+
+
 def test_newer_format_version_blocks(tmp_path, monkeypatch):
     source_dir = tmp_path / "source"
     dest_zip = tmp_path / "backup.zip"
@@ -398,7 +669,7 @@ def test_restore_commit_round_trip_replaces_logbook(tmp_path, monkeypatch):
     conn_a.commit()
     conn_a.close()
 
-    staging = tmp_path / "staging"
+    staging = live_dir / ".sfl_zip_restore_stage-a1b2c3d4"
     _, log = _log_collector()
     preview = inspect_backup(str(dest_zip), str(staging), log)
     assert preview["ok"] and not preview["blocked"], preview
@@ -451,7 +722,7 @@ def test_tampered_photo_is_truly_skipped_not_restored(tmp_path, monkeypatch):
     live_dir.mkdir()
     monkeypatch.setattr(paths, "app_dir", lambda: str(live_dir))
 
-    staging = tmp_path / "staging"
+    staging = live_dir / ".sfl_zip_restore_stage-a1b2c3d4"
     _, log = _log_collector()
     preview = inspect_backup(str(dest_zip), str(staging), log)
     assert preview["ok"] and not preview["blocked"], preview
@@ -473,7 +744,7 @@ def test_restore_commit_rolls_back_on_failure(tmp_path, monkeypatch):
     conn_a.commit()
     conn_a.close()
 
-    staging = tmp_path / "staging"
+    staging = live_dir / ".sfl_zip_restore_stage-a1b2c3d4"
     staging.mkdir()
     staged_db_path = staging / config.DB_FILENAME
     staged_conn = app.open_db(str(staged_db_path))
@@ -481,14 +752,14 @@ def test_restore_commit_rolls_back_on_failure(tmp_path, monkeypatch):
     staged_conn.commit()
     staged_conn.close()
 
-    orig_move = shutil.move
+    orig_replace = os.replace
 
-    def failing_move(src, dst, *a, **kw):
+    def failing_replace(src, dst, *a, **kw):
         if os.path.abspath(str(src)) == os.path.abspath(str(staged_db_path)):
             raise OSError("simulated failure moving staged db into place")
-        return orig_move(src, dst, *a, **kw)
+        return orig_replace(src, dst, *a, **kw)
 
-    monkeypatch.setattr(restore_mod.shutil, "move", failing_move)
+    monkeypatch.setattr(restore_mod.os, "replace", failing_replace)
 
     _, log = _log_collector()
     result = restore_commit(str(staging), log)
@@ -513,32 +784,27 @@ def test_restore_commit_reports_and_reconnects_when_aside_folder_fails(tmp_path,
     conn_a.commit()
     conn_a.close()
 
-    staging = tmp_path / "staging"
+    staging = live_dir / ".sfl_zip_restore_stage-a1b2c3d4"
     staging.mkdir()
     staged_conn = app.open_db(str(staging / config.DB_FILENAME))
     _insert_firearm(staged_conn, "00001", "Sig", "P320")
     staged_conn.commit()
     staged_conn.close()
 
-    def failing_mkdtemp(*a, **kw):
-        raise PermissionError("simulated: folder creation denied")
+    original_mkdir = os.mkdir
 
-    monkeypatch.setattr(restore_mod.tempfile, "mkdtemp", failing_mkdtemp)
+    def failing_mkdir(path, *args, **kwargs):
+        if "sfl_zip_restore_aside-" in str(path):
+            raise PermissionError("simulated: folder creation denied")
+        return original_mkdir(path, *args, **kwargs)
 
-    api = app.Api()
-    api.set_conn(app.open_db(str(live_dir / config.DB_FILENAME)))
-    api._restore_staging = str(staging)
-    try:
-        result = api.restore_commit()
+    monkeypatch.setattr(restore_mod.os, "mkdir", failing_mkdir)
 
-        assert result["ok"] is False
-        assert "not changed" in result["error"]
-        rows = api._conn.execute("SELECT make, model FROM firearms").fetchall()
-        assert [tuple(r) for r in rows] == [("Ruger", "10/22")]
-        assert not staging.exists()
-        assert api._restore_staging is None
-    finally:
-        api.close_conn()
+    result = restore_commit(str(staging), lambda _: None)
+
+    assert result["ok"] is False
+    assert "not changed" in result["error"]
+    assert (live_dir / config.DB_FILENAME).is_file()
 
 
 def test_restore_commit_keeps_originals_when_rollback_fails_setting_aside(tmp_path, monkeypatch):
@@ -553,36 +819,30 @@ def test_restore_commit_keeps_originals_when_rollback_fails_setting_aside(tmp_pa
     original_photo = live_dir / config.PHOTOS_DIRNAME / "original.jpg"
     original_photo.write_bytes(b"original")
 
-    staging = tmp_path / "staging"
+    staging = live_dir / ".sfl_zip_restore_stage-a1b2c3d4"
     staging.mkdir()
     staged_conn = app.open_db(str(staging / config.DB_FILENAME))
     staged_conn.close()
 
-    original_move = shutil.move
+    original_replace = os.replace
 
     def fail_setting_aside_and_move_back(src, dst, *args, **kwargs):
         if os.path.abspath(str(src)) == os.path.abspath(str(live_dir / config.PHOTOS_DIRNAME)):
             raise OSError("simulated setting-aside failure")
-        if os.path.basename(str(src)) == config.DB_FILENAME and "sfl_restore_aside_" in str(src):
+        if os.path.basename(str(src)) == config.DB_FILENAME and "sfl_zip_restore_aside-" in str(src):
             raise OSError("simulated move-back failure")
-        return original_move(src, dst, *args, **kwargs)
+        return original_replace(src, dst, *args, **kwargs)
 
-    monkeypatch.setattr(restore_mod.shutil, "move", fail_setting_aside_and_move_back)
+    monkeypatch.setattr(restore_mod.os, "replace", fail_setting_aside_and_move_back)
     logs, log = _log_collector()
     result = restore_commit(str(staging), log)
 
-    kept = result["kept_folder"]
-    try:
-        assert result["ok"] is False
-        assert Path(kept).parent == live_dir
-        assert kept in result["error"]
-        assert "not changed" not in result["error"].lower()
-        assert "could not be fully put back" in result["error"].lower()
-        assert (Path(kept) / config.DB_FILENAME).is_file()
-        assert original_photo.is_file()
-        assert any(kept in message for message in logs)
-    finally:
-        shutil.rmtree(kept, ignore_errors=True)
+    assert result["ok"] is False
+    assert result["recovery_required"] is True
+    assert original_photo.read_bytes() == b"original"
+    assert (staging / config.DB_FILENAME).is_file()
+    assert (live_dir / ".sfl_zip_restore_aside-a1b2c3d4" / config.DB_FILENAME).is_file()
+    assert os.path.exists(live_dir / "simple_firearm_logbook.zip_restore.json")
 
 
 def test_restore_commit_keeps_originals_when_rollback_fails_moving_backup_in(tmp_path, monkeypatch):
@@ -594,35 +854,30 @@ def test_restore_commit_keeps_originals_when_rollback_fails_moving_backup_in(tmp
     conn.commit()
     conn.close()
 
-    staging = tmp_path / "staging"
+    staging = live_dir / ".sfl_zip_restore_stage-a1b2c3d4"
     staging.mkdir()
     staged_db = staging / config.DB_FILENAME
     staged_conn = app.open_db(str(staged_db))
     staged_conn.close()
 
-    original_move = shutil.move
+    original_replace = os.replace
 
     def fail_backup_and_move_back(src, dst, *args, **kwargs):
         if os.path.abspath(str(src)) == os.path.abspath(str(staged_db)):
             raise OSError("simulated backup move failure")
-        if os.path.basename(str(src)) == config.DB_FILENAME and "sfl_restore_aside_" in str(src):
+        if os.path.basename(str(src)) == config.DB_FILENAME and "sfl_zip_restore_aside-" in str(src):
             raise OSError("simulated move-back failure")
-        return original_move(src, dst, *args, **kwargs)
+        return original_replace(src, dst, *args, **kwargs)
 
-    monkeypatch.setattr(restore_mod.shutil, "move", fail_backup_and_move_back)
+    monkeypatch.setattr(restore_mod.os, "replace", fail_backup_and_move_back)
     logs, log = _log_collector()
     result = restore_commit(str(staging), log)
 
-    kept = result["kept_folder"]
-    try:
-        assert result["ok"] is False
-        assert kept in result["error"]
-        assert "not changed" not in result["error"].lower()
-        assert "could not be fully put back" in result["error"].lower()
-        assert (Path(kept) / config.DB_FILENAME).is_file()
-        assert any(kept in message for message in logs)
-    finally:
-        shutil.rmtree(kept, ignore_errors=True)
+    assert result["ok"] is False
+    assert result["recovery_required"] is True
+    assert staged_db.is_file()
+    assert (live_dir / ".sfl_zip_restore_aside-a1b2c3d4" / config.DB_FILENAME).is_file()
+    assert os.path.exists(live_dir / "simple_firearm_logbook.zip_restore.json")
 
 
 def test_restore_commit_keeps_originals_when_a_partial_restore_cannot_be_cleared(tmp_path, monkeypatch):
@@ -636,7 +891,7 @@ def test_restore_commit_keeps_originals_when_a_partial_restore_cannot_be_cleared
     (live_dir / config.PHOTOS_DIRNAME).mkdir()
     (live_dir / config.PHOTOS_DIRNAME / "original.jpg").write_bytes(b"original")
 
-    staging = tmp_path / "staging"
+    staging = live_dir / ".sfl_zip_restore_stage-a1b2c3d4"
     staging.mkdir()
     staged_conn = app.open_db(str(staging / config.DB_FILENAME))
     staged_conn.close()
@@ -644,33 +899,24 @@ def test_restore_commit_keeps_originals_when_a_partial_restore_cannot_be_cleared
     (staging / config.PHOTOS_DIRNAME / "backup.jpg").write_bytes(b"backup")
     (staging / config.ATTACHMENTS_DIRNAME).mkdir()
 
-    live_photos = os.path.abspath(str(live_dir / config.PHOTOS_DIRNAME))
-    original_move = shutil.move
-    original_cleanup = restore_mod._cleanup_path
+    original_replace = os.replace
 
     def fail_attachments_move(src, dst, *args, **kwargs):
-        if os.path.basename(str(src)) == config.ATTACHMENTS_DIRNAME and "staging" in str(src):
+        if os.path.basename(str(src)) == config.ATTACHMENTS_DIRNAME and "sfl_zip_restore_stage-" in str(src):
             raise OSError("simulated backup move failure")
-        return original_move(src, dst, *args, **kwargs)
+        if os.path.basename(str(src)) == config.PHOTOS_DIRNAME and "sfl_zip_restore_aside-" in str(src):
+            raise OSError("simulated partial restore rollback failure")
+        return original_replace(src, dst, *args, **kwargs)
 
-    def keep_restored_photos(path, log):
-        if os.path.abspath(str(path)) == live_photos:
-            return  # simulates a locked folder that can't be removed
-        original_cleanup(path, log)
-
-    monkeypatch.setattr(restore_mod.shutil, "move", fail_attachments_move)
-    monkeypatch.setattr(restore_mod, "_cleanup_path", keep_restored_photos)
+    monkeypatch.setattr(restore_mod.os, "replace", fail_attachments_move)
     logs, log = _log_collector()
     result = restore_commit(str(staging), log)
 
-    kept = result["kept_folder"]
-    try:
-        assert result["ok"] is False
-        assert "not changed" not in result["error"].lower()
-        assert (Path(kept) / config.PHOTOS_DIRNAME / "original.jpg").is_file()
-        assert not (live_dir / config.PHOTOS_DIRNAME / config.PHOTOS_DIRNAME).exists()
-    finally:
-        shutil.rmtree(kept, ignore_errors=True)
+    assert result["ok"] is False
+    assert result["recovery_required"] is True
+    assert (staging / config.PHOTOS_DIRNAME / "backup.jpg").read_bytes() == b"backup"
+    assert (live_dir / ".sfl_zip_restore_aside-a1b2c3d4" / config.PHOTOS_DIRNAME / "original.jpg").read_bytes() == b"original"
+    assert (staging / config.ATTACHMENTS_DIRNAME).is_dir()
 
 
 def _make_staging(temp_dir, name, age_seconds, now):

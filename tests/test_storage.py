@@ -157,7 +157,7 @@ def test_storage_routes_export_backup_and_restore(tmp_path, monkeypatch):
         with zipfile.ZipFile(archive) as zipped:
             assert zipped.read("photos/00001_1.jpg")
             assert zipped.read("attachments/00001_1.pdf") == b"receipt"
-        staging = tmp_path / "staging"
+        staging = tmp_path / ".sfl_zip_restore_stage-a1b2c3d4"
         preview = restore.inspect_backup(str(archive), str(staging), lambda _: None)
         assert preview["ok"] and preview["integrity_ok"]
         conn.close()

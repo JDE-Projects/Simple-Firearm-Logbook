@@ -319,6 +319,25 @@ def _show_restore_stopped_error(folder: str, product_name: str = "Simple Firearm
         pass
 
 
+def _show_zip_restore_stopped_error(folder: str, product_name: str = "Simple Firearm Logbook"):
+    msg = (f"A backup restore for {product_name} was interrupted and couldn't be finished or undone. "
+           f"Every file was kept in this data folder:\n\n{folder}\n\nNothing was deleted. "
+           "Don't delete or move any files in that folder.")
+    try:
+        ctypes.windll.user32.MessageBoxW(0, msg, product_name, 0x10)
+    except Exception:
+        pass
+
+
+def _show_zip_restore_recovery_required_error(folder: str, product_name: str = "Simple Firearm Logbook"):
+    msg = (f"The backup restore couldn't be undone. Every file was kept in:\n\n{folder}\n\n"
+           "The app will finish or undo it the next time it opens. Nothing was deleted.")
+    try:
+        ctypes.windll.user32.MessageBoxW(0, msg, product_name, 0x10)
+    except Exception:
+        pass
+
+
 def _show_restore_complete_info(message: str, product_name: str = "Simple Firearm Logbook"):
     try:
         ctypes.windll.user32.MessageBoxW(0, message, product_name, 0x40)

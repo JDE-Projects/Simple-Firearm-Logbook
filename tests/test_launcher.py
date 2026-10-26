@@ -108,6 +108,7 @@ def test_run_uses_custom_api_and_database_preparer_and_sets_config(monkeypatch, 
             calls.setdefault("order", []).append("close_conn")
 
     def prepare_database(api, path, schema_version):
+        calls.setdefault("order", []).append("prepare")
         calls["db_path"] = path
         calls["schema_version"] = schema_version
         return startup.PreparedDatabase("ready", "connection", "test connection", ("launch warning",), "restored")
@@ -131,6 +132,11 @@ def test_run_uses_custom_api_and_database_preparer_and_sets_config(monkeypatch, 
     )
     monkeypatch.setattr(launcher.platform_win, "_writable_check", lambda folder: folder == str(tmp_path))
     monkeypatch.setattr(launcher.platform_win, "_acquire_folder_lock", lambda folder: True)
+    monkeypatch.setattr(
+        launcher.zip_restore_recovery,
+        "recover",
+        lambda folder, log: (calls.setdefault("order", []).append("zip_recovery"), "finished")[1],
+    )
     monkeypatch.setattr(launcher.platform_win, "_restore_geometry", lambda win: None)
     monkeypatch.setattr(launcher.platform_win, "_save_geometry", lambda win: None)
     monkeypatch.setattr(
@@ -157,8 +163,8 @@ def test_run_uses_custom_api_and_database_preparer_and_sets_config(monkeypatch, 
     assert calls["start"]["gui"] == "qt"
     assert calls["closed"] is True
     assert calls["pruned"] is True
-    assert calls["notices"] == ["launch warning"]
-    assert calls["order"] == ["notice", "clear_record", "window", "close_restore", "close_conn"]
+    assert calls["notices"] == ["The backup restore that was interrupted has finished.", "launch warning"]
+    assert calls["order"] == ["zip_recovery", "prepare", "notice", "clear_record", "window", "close_restore", "close_conn"]
     assert config.APP_VERSION == "9.8.7"
     assert config.GITHUB_OWNER == "example-owner"
     assert config.GITHUB_REPO == "example-repo"
@@ -246,6 +252,81 @@ def test_run_stops_when_folder_lock_is_refused(monkeypatch, tmp_path):
 
     assert exited.value.code == 1
     assert calls == [(str(tmp_path), "Simple Firearm Logbook")]
+
+
+def test_both_restore_records_present_stops_launch(monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "APP_VERSION", config.APP_VERSION)
+    monkeypatch.setattr(config, "GITHUB_OWNER", config.GITHUB_OWNER)
+    monkeypatch.setattr(config, "GITHUB_REPO", config.GITHUB_REPO)
+    zip_record = tmp_path / "simple_firearm_logbook.zip_restore.json"
+    normal_record = tmp_path / "simple_firearm_logbook.restore.json"
+    zip_record.write_text("{}", encoding="utf-8")
+    normal_record.write_text("{}", encoding="utf-8")
+    shown = []
+    monkeypatch.setattr(launcher, "app_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(launcher.platform_win, "_acquire_single_instance", lambda name: True)
+    monkeypatch.setattr(launcher.platform_win, "_writable_check", lambda folder: True)
+    monkeypatch.setattr(launcher.platform_win, "_acquire_folder_lock", lambda folder: True)
+    monkeypatch.setattr(launcher.platform_win, "_show_zip_restore_stopped_error", lambda *args: shown.append(args))
+    monkeypatch.setattr(launcher.zip_restore_recovery, "recover", lambda *args: pytest.fail("recover should not run"))
+    description = launcher.AppDescription(
+        "Embedding Logbook", "Example.EmbeddingLogbook", "Example_EmbeddingLogbook", "1.0.0",
+        "example-owner", "example-repo", "https://example.invalid/update",
+        prepare_database=lambda *args: pytest.fail("prepare_database should not run"),
+    )
+
+    with pytest.raises(SystemExit) as exited:
+        launcher.run(description)
+
+    assert exited.value.code == 1
+    assert shown == [(str(tmp_path), "Embedding Logbook")]
+    assert zip_record.exists()
+    assert normal_record.exists()
+
+
+def test_cleanup_pending_launch_carries_on_with_notice(monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "APP_VERSION", config.APP_VERSION)
+    monkeypatch.setattr(config, "GITHUB_OWNER", config.GITHUB_OWNER)
+    monkeypatch.setattr(config, "GITHUB_REPO", config.GITHUB_REPO)
+    calls = {"notices": [], "logs": []}
+
+    class FakeApi:
+        def set_app_description(self, description):
+            pass
+
+        def prune_debug_logs(self):
+            pass
+
+        def log(self, message):
+            calls["logs"].append(message)
+
+        def add_launch_notice(self, message):
+            calls["notices"].append(message)
+
+    def prepare_database(api, path, schema_version):
+        calls["prepared"] = (api, path, schema_version)
+        return startup.PreparedDatabase("unavailable", None, "test")
+
+    description = launcher.AppDescription(
+        "Embedding Logbook", "Example.EmbeddingLogbook", "Example_EmbeddingLogbook", "1.0.0",
+        "example-owner", "example-repo", "https://example.invalid/update",
+        api_class=FakeApi, prepare_database=prepare_database,
+    )
+    monkeypatch.setattr(launcher, "app_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(launcher.platform_win, "_acquire_single_instance", lambda name: True)
+    monkeypatch.setattr(launcher.platform_win, "_writable_check", lambda folder: True)
+    monkeypatch.setattr(launcher.platform_win, "_acquire_folder_lock", lambda folder: True)
+    monkeypatch.setattr(launcher.zip_restore_recovery, "recover", lambda *args: "cleanup_pending")
+    monkeypatch.setattr(launcher.platform_win, "_show_database_unavailable_error", lambda *args: calls.setdefault("shown", []).append(args))
+
+    with pytest.raises(SystemExit) as exited:
+        launcher.run(description)
+
+    assert exited.value.code == 1
+    assert calls["prepared"][1:] == (os.path.join(str(tmp_path), config.DB_FILENAME), config.SCHEMA_VERSION)
+    assert calls["notices"] == [
+        "Some leftover files from an interrupted backup restore couldn't be removed from the data folder yet. The app will try again next time it opens."
+    ]
 
 
 @pytest.mark.parametrize(
