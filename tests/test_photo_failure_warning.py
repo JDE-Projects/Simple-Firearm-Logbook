@@ -43,6 +43,21 @@ def test_single_too_large_plural():
     assert r == "4 images were too large and weren't added."
 
 
+def test_single_missing_singular():
+    r = app.photo_failure_warning({"missing": 1})
+    assert r == "1 file couldn't be found and wasn't added."
+
+
+def test_single_missing_plural():
+    r = app.photo_failure_warning({"missing": 2})
+    assert r == "2 files couldn't be found and weren't added."
+
+
+def test_missing_combined_with_another_bucket():
+    r = app.photo_failure_warning({"not_image": 1, "missing": 2})
+    assert r == "3 files weren't added: 1 wasn't an image, 2 couldn't be found."
+
+
 def test_two_buckets_combined():
     r = app.photo_failure_warning({"not_image": 1, "damaged": 1, "too_large": 0})
     assert r == "2 files weren't added: 1 wasn't an image, 1 was damaged."
