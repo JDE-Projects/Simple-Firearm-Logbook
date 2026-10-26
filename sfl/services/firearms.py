@@ -3,7 +3,6 @@ function takes its dependencies (conn, and window/log where needed)
 explicitly rather than reading them off an object, so there is no hidden
 state."""
 import datetime
-import os
 
 from sfl import config, paths
 from sfl import storage
@@ -22,7 +21,7 @@ def get_config(log):
     try:
         return {"ok": True, "version": config.APP_VERSION, "theme": settings_service._load_theme()}
     except Exception as e:
-        log(f"get_config failed: {e}")
+        log(f"get_config failed ({type(e).__name__})")
         return {"ok": False, "error": "Couldn't load the app's configuration."}
 
 
@@ -52,7 +51,7 @@ def get_autocomplete(conn, log):
                 types.append(t)
         return {"ok": True, "makes": makes, "calibers": calibers, "types": types}
     except Exception as e:
-        log(f"get_autocomplete failed: {e}")
+        log(f"get_autocomplete failed ({type(e).__name__})")
         return {"ok": False, "error": "Couldn't load suggestions."}
 
 
@@ -75,7 +74,7 @@ def list_firearms(conn, log):
             firearms.append(d)
         return {"ok": True, "firearms": firearms}
     except Exception as e:
-        log(f"list_firearms failed: {e}")
+        log(f"list_firearms failed ({type(e).__name__})")
         return {"ok": False, "error": "Couldn't load the firearms list."}
 
 
@@ -91,7 +90,7 @@ def get_firearm(conn, firearm_id, log):
             "attachments": attachments_service._get_attachments(conn, firearm_id),
         }
     except Exception as e:
-        log(f"get_firearm failed: {e}")
+        log(f"get_firearm failed ({type(e).__name__})")
         return {"ok": False, "error": "Couldn't load that firearm."}
 
 
@@ -163,11 +162,11 @@ def create_firearm(conn, log, make, model, serial_number="", firearm_type="", ca
         return {"ok": True, "firearm_id": new_id, "log_number": log_number}
     except SaveRejected as e:
         conn.rollback()
-        log(f"create_firearm rejected: {e}")
+        log(f"create_firearm rejected ({type(e).__name__})")
         return {"ok": False, "error": str(e)}
     except Exception as e:
         conn.rollback()
-        log(f"create_firearm failed: {e}")
+        log(f"create_firearm failed ({type(e).__name__})")
         return {"ok": False, "error": "Couldn't save the firearm."}
 
 
@@ -248,11 +247,11 @@ def update_firearm(conn, log, firearm_id, make, model, serial_number="", firearm
         return {"ok": True}
     except SaveRejected as e:
         conn.rollback()
-        log(f"update_firearm rejected: {e}")
+        log(f"update_firearm rejected ({type(e).__name__})")
         return {"ok": False, "error": str(e)}
     except Exception as e:
         conn.rollback()
-        log(f"update_firearm failed: {e}")
+        log(f"update_firearm failed ({type(e).__name__})")
         return {"ok": False, "error": "Couldn't save the firearm."}
 
 
@@ -302,11 +301,11 @@ def update_disposition(conn, log, firearm_id, status, date="", to="", address=""
         return {"ok": True}
     except SaveRejected as e:
         conn.rollback()
-        log(f"update_disposition rejected: {e}")
+        log(f"update_disposition rejected ({type(e).__name__})")
         return {"ok": False, "error": str(e)}
     except Exception as e:
         conn.rollback()
-        log(f"update_disposition failed: {e}")
+        log(f"update_disposition failed ({type(e).__name__})")
         return {"ok": False, "error": "Couldn't save the disposition."}
 
 
@@ -361,8 +360,7 @@ def delete_firearm(conn, window, log, firearm_id, export_backup_first=False, ext
                     failed_paths.append(full)
         log(f"Firearm {row['log_number']} deleted")
         if failed_paths:
-            failed_names = [os.path.basename(p) for p in failed_paths]
-            log(f"Firearm {row['log_number']} deleted, but these files could not be removed from disk: {failed_names}")
+            log(f"Firearm {row['log_number']} deleted, but {len(failed_paths)} file(s) could not be removed from disk")
             return {
                 "ok": True,
                 "warning": f"The record was deleted, but {len(failed_paths)} file(s) could not be removed from disk. See the log for details.",
@@ -370,9 +368,9 @@ def delete_firearm(conn, window, log, firearm_id, export_backup_first=False, ext
         return {"ok": True}
     except SaveRejected as e:
         conn.rollback()
-        log(f"delete_firearm rejected: {e}")
+        log(f"delete_firearm rejected ({type(e).__name__})")
         return {"ok": False, "error": str(e)}
     except Exception as e:
         conn.rollback()
-        log(f"delete_firearm failed: {e}")
+        log(f"delete_firearm failed ({type(e).__name__})")
         return {"ok": False, "error": "Couldn't delete the firearm."}

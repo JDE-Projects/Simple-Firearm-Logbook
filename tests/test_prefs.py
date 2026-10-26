@@ -58,7 +58,7 @@ def test_save_theme_preserves_existing_window_preferences(monkeypatch, tmp_path)
     window = {"x": 10, "y": 20, "width": 900, "height": 700}
     pref_path.write_text(json.dumps({"theme": "dark", "window": window}), encoding="utf-8")
     api = object.__new__(app.Api)
-    api.log = lambda _message: None
+    api._log = lambda _message: None
 
     assert api.save_theme("light") == {"ok": True}
     assert app.load_prefs() == {"theme": "light", "window": window}

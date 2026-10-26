@@ -67,7 +67,7 @@ def choose_attachments(window, log):
             )
         return {"ok": True, "files": files}
     except Exception as e:
-        log(f"choose_attachments failed: {e}")
+        log(f"choose_attachments failed ({type(e).__name__})")
         return {"ok": False, "error": "Couldn't open the file picker."}
 
 
@@ -111,7 +111,7 @@ def add_attachments(conn, log, firearm_id, source_paths):
                 # sequence number on one that didn't make it in.
                 seq -= 1
                 failed += 1
-                log(f"Attachment copy failed for {os.path.basename(src)}: {e}")
+                log(f"Attachment copy failed ({type(e).__name__})")
                 try:
                     if os.path.exists(target_full):
                         storage.current().remove(target_full)
@@ -140,7 +140,7 @@ def add_attachments(conn, log, firearm_id, source_paths):
                 storage.current().remove(p)
             except Exception:
                 pass
-        log(f"add_attachments failed: {e}")
+        log(f"add_attachments failed ({type(e).__name__})")
         return {"ok": False, "error": "Couldn't add the file(s)."}
 
 
@@ -158,7 +158,7 @@ def rename_attachment(conn, log, attachment_id, new_label):
         return {"ok": True, "attachments": _get_attachments(conn, row["firearm_id"])}
     except Exception as e:
         conn.rollback()
-        log(f"rename_attachment failed: {e}")
+        log(f"rename_attachment failed ({type(e).__name__})")
         return {"ok": False, "error": "Couldn't rename the document."}
 
 
@@ -192,7 +192,7 @@ def open_attachment(conn, log, attachment_id):
             log(f"open_attachment: no default handler for attachment {attachment_id}, revealed in Explorer")
             return {"ok": True, "revealed": True}
     except Exception as e:
-        log(f"open_attachment failed: {e}")
+        log(f"open_attachment failed ({type(e).__name__})")
         return {"ok": False, "error": "Couldn't open that document."}
 
 
@@ -210,7 +210,7 @@ def delete_attachment(conn, log, attachment_id):
             try:
                 storage.current().remove(full)
             except Exception as e:
-                log(f"Deleted attachment {attachment_id}, but couldn't remove file {full}: {e}")
+                log(f"Deleted attachment {attachment_id}, but couldn't remove its file ({type(e).__name__})")
                 warning = (
                     "The document was deleted, but its file could not be removed from disk. "
                     "See the log for details."
@@ -222,7 +222,7 @@ def delete_attachment(conn, log, attachment_id):
         return result
     except Exception as e:
         conn.rollback()
-        log(f"delete_attachment failed: {e}")
+        log(f"delete_attachment failed ({type(e).__name__})")
         return {"ok": False, "error": "Couldn't delete the document."}
 
 
@@ -263,5 +263,5 @@ def save_attachment_copy(conn, window, log, attachment_id):
         log(f"Saved a copy of attachment {attachment_id}")
         return {"ok": True, "path": path}
     except Exception as e:
-        log(f"save_attachment_copy failed: {e}")
+        log(f"save_attachment_copy failed ({type(e).__name__})")
         return {"ok": False, "error": "Couldn't save a copy."}

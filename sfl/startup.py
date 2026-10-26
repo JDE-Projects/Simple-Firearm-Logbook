@@ -32,7 +32,7 @@ def _readwrite_connection(path: str) -> sqlite3.Connection:
 
 def _result(api, outcome: str, conn: sqlite3.Connection | None, detail: str,
             notices: tuple[str, ...] = (), restore_notice: str | None = None) -> PreparedDatabase:
-    api.log(f"Launch database {outcome}: {detail}")
+    api._log(f"Launch database {outcome}: {detail}")
     return PreparedDatabase(outcome, conn, detail, notices, restore_notice)
 
 
@@ -55,7 +55,7 @@ def _database_error_outcome(error: sqlite3.DatabaseError) -> tuple[str, str]:
 def _initialize_database(api, db_path: str, schema_version: int, detail: str) -> PreparedDatabase:
     try:
         conn = db.open_db(db_path, schema_version)
-        restore_service.sweep_stale_staging(api.log)
+        restore_service.sweep_stale_staging(api._log)
         return _result(api, "ready", conn, detail)
     except sqlite3.DatabaseError as error:
         outcome, error_detail = _database_error_outcome(error)
@@ -104,11 +104,11 @@ def prepare_database(api, db_path: str, schema_version: int) -> PreparedDatabase
         if not tables:
             _close(conn)
             conn = db.open_db(db_path, schema_version)
-            restore_service.sweep_stale_staging(api.log)
+            restore_service.sweep_stale_staging(api._log)
             return _result(api, "ready", conn, "schema-empty database initialized for first launch")
         backup = launch_backup.create_launch_backup(conn, db_path, schema_version)
         if not backup.ok:
-            api.log(f"Launch backup failed: {backup.detail}")
+            api._log(f"Launch backup failed: {backup.detail}")
             if db.schema_would_change(conn, schema_version):
                 _close(conn)
                 return _result(api, "upgrade_blocked", None, backup.detail)
@@ -118,14 +118,14 @@ def prepare_database(api, db_path: str, schema_version: int) -> PreparedDatabase
             )
             notices = (notice,)
         elif backup.prune_failed:
-            api.log(f"Launch backup prune failed: {backup.detail}")
+            api._log(f"Launch backup prune failed: {backup.detail}")
             notices = (f"Older backups in {backup.folder} couldn't be cleaned up.",)
         else:
-            api.log(f"Launch backup saved: {backup.folder}")
+            api._log("Launch backup saved")
             notices = ()
         conn.execute("PRAGMA foreign_keys = ON")
         db.ensure_schema(conn, schema_version)
-        restore_service.sweep_stale_staging(api.log)
+        restore_service.sweep_stale_staging(api._log)
         return _result(api, "ready", conn, "database recovered, checked, and prepared", notices)
     except sqlite3.DatabaseError as error:
         _close(conn)

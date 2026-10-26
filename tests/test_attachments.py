@@ -265,7 +265,6 @@ def test_delete_attachment_warns_when_file_cannot_be_removed(tmp_path, monkeypat
         source = _make_file(tmp_path / "src" / "receipt.pdf")
         added = api.add_attachments(firearm_id, [source])
         attachment_id = added["attachments"][0]["id"]
-        stored_path = tmp_path / added["attachments"][0]["filename"]
         logs = []
         monkeypatch.setattr(
             attachments.os, "remove", lambda path: (_ for _ in ()).throw(OSError("locked"))
@@ -276,7 +275,7 @@ def test_delete_attachment_warns_when_file_cannot_be_removed(tmp_path, monkeypat
         assert result["ok"] is True
         assert result["attachments"] == []
         assert "warning" in result
-        assert any(str(stored_path) in message for message in logs)
+        assert any("couldn't remove its file (OSError)" in message for message in logs)
     finally:
         api.close_conn()
 

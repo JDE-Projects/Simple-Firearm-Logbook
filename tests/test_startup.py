@@ -12,7 +12,7 @@ class FakeApi:
     def __init__(self):
         self.messages = []
 
-    def log(self, message):
+    def _log(self, message):
         self.messages.append(message)
 
 
@@ -225,7 +225,7 @@ def test_ready_launch_sweeps_stale_staging(tmp_path, monkeypatch):
     api, result = _prepare(path)
 
     assert result.outcome == "ready"
-    assert swept == [api.log]
+    assert swept == [api._log]
     result.conn.close()
 
 

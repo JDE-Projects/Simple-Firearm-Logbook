@@ -18,7 +18,7 @@ def test_set_debug_creates_redacted_log(monkeypatch, tmp_path):
     api = Api()
 
     assert api.set_debug(True) == {"ok": True}
-    api.log(r"C:\Users\John\Documents\record.pdf")
+    api._log(r"C:\Users\John\Documents\record.pdf")
 
     logs = list(tmp_path.glob("Debug_Log_*.txt"))
     assert len(logs) == 1
@@ -103,9 +103,34 @@ def test_write_failure_turns_logging_off_and_warns(monkeypatch, tmp_path):
         return real_open(file, mode, *args, **kwargs)
 
     monkeypatch.setattr(debug_log, "open", fake_open, raising=False)
-    api.log("write failure")
-
+    api._log("write failure")
     assert api._debug_log.is_enabled() is False
     assert len(window.calls) == 1
     assert "Debug log: write failed" in window.calls[0]
     assert window.calls[0].endswith(", false);")
+
+
+def test_page_log_writes_length_only(monkeypatch, tmp_path):
+    monkeypatch.setattr(paths, "app_dir", lambda: str(tmp_path))
+    api = Api()
+    assert api.set_debug(True) == {"ok": True}
+
+    api.log("ZZMARKER42 secret")
+
+    contents = next(tmp_path.glob("Debug_Log_*.txt")).read_text(encoding="utf-8")
+    assert "ZZMARKER42" not in contents
+    assert "Page reported a message (17 chars)" in contents
+
+
+def test_internal_log_is_hidden_from_page(monkeypatch, tmp_path):
+    monkeypatch.setattr(paths, "app_dir", lambda: str(tmp_path))
+    api = Api()
+    assert api.set_debug(True) == {"ok": True}
+
+    api._log("plain text")
+
+    contents = next(tmp_path.glob("Debug_Log_*.txt")).read_text(encoding="utf-8")
+    assert "plain text" in contents
+    assert "_log" in Api.__dict__
+    assert "log" in Api.__dict__
+

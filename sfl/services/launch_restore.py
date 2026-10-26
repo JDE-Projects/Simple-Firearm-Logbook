@@ -42,7 +42,7 @@ def _readwrite_connection(path: str) -> sqlite3.Connection:
 
 
 def _log(api, message: str) -> None:
-    api.log(f"Launch restore: {message}")
+    api._log(f"Launch restore: {message}")
 
 
 def _fsync_file(path: str) -> None:
@@ -151,7 +151,7 @@ def _undo(api, db_path: str, record: dict) -> bool:
             path = _path(folder, name)
             if os.path.exists(path):
                 os.remove(path)
-                _log(api, f"undo removed {name}")
+                _log(api, "undo removed a staged restore file")
         os.remove(_record_path(db_path))
         _log(api, "undo cleared restore record")
         return True
@@ -178,7 +178,7 @@ def _open_restored(api, db_path: str, schema_version: int, record: dict) -> Rest
             conn.close()
             return RestoreResult("restore_stopped")
         db.ensure_schema(conn, schema_version)
-        restore_service.sweep_stale_staging(api.log)
+        restore_service.sweep_stale_staging(api._log)
         return RestoreResult("ready", conn, _notice(os.path.dirname(db_path), record))
     except Exception as error:
         if conn is not None:
@@ -232,9 +232,9 @@ def _pick_backup(api, db_path: str, schema_version: int) -> tuple[str, str] | No
     for name in names:
         checked = launch_backup.check_backup(_path(folder, name), schema_version)
         if checked.ok and not checked.newer:
-            _log(api, f"selected backup {name}")
+            _log(api, "selected backup")
             return name, _backup_timestamp(name)
-        _log(api, f"skipped backup {name} ({'newer schema' if checked.newer else checked.detail})")
+        _log(api, f"skipped backup ({'newer schema' if checked.newer else checked.detail})")
     _log(api, "no usable launch backup was found")
     return None
 
@@ -251,13 +251,13 @@ def _remove_orphaned_staging(api, db_path: str) -> None:
             continue
         path = _path(folder, name)
         if os.path.islink(path) or not os.path.isfile(path):
-            _log(api, f"left non-file orphaned staging path {name}")
+            _log(api, "left non-file orphaned staging path")
             continue
         try:
             os.remove(path)
-            _log(api, f"removed orphaned staging file {name}")
+            _log(api, "removed orphaned staging file")
         except OSError as error:
-            _log(api, f"couldn't remove orphaned staging file {name} ({type(error).__name__})")
+            _log(api, f"couldn't remove orphaned staging file ({type(error).__name__})")
 
 
 def restore_damaged(api, db_path: str, schema_version: int) -> RestoreResult:
@@ -296,14 +296,14 @@ def restore_damaged(api, db_path: str, schema_version: int) -> RestoreResult:
         return RestoreResult("restore_failed")
     try:
         _write_record(db_path, record)
-        _log(api, f"prepared restore from {backup_name}")
+        _log(api, "prepared restore from backup")
         _copy_durable(db_path, _path(folder, record["kept_temporary_name"]))
         os.replace(_path(folder, record["kept_temporary_name"]), _path(folder, record["kept_name"]))
-        _log(api, f"kept damaged file as {record['kept_name']}")
+        _log(api, "kept damaged file")
         live_journal = db_path + "-journal"
         if os.path.exists(live_journal):
             os.replace(live_journal, _path(folder, record["kept_journal_name"]))
-            _log(api, f"moved live journal to {record['kept_journal_name']}")
+            _log(api, "moved live journal")
         if os.path.exists(live_journal):
             raise RuntimeError("live journal remains before swap")
     except Exception as error:

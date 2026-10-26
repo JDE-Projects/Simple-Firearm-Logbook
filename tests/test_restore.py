@@ -956,7 +956,7 @@ def test_sweep_logs_a_folder_it_cannot_delete(tmp_path, monkeypatch):
     restore_mod.sweep_stale_staging(logged.append, temp_dir=str(tmp_path), now=now)
 
     assert len(logged) == 1
-    assert "sfl_restore_locked" in logged[0] and "in use" in logged[0]
+    assert "cleanup failed (PermissionError)" in logged[0]
 
 
 def test_sweep_logs_when_temp_folder_cannot_be_read(tmp_path):
@@ -1037,10 +1037,10 @@ def test_restore_cancel_logs_a_staging_folder_it_cannot_delete(tmp_path, monkeyp
     _make_file(staging / "logbook.db", b"private")
     api._restore_staging = str(staging)
     logged = []
-    monkeypatch.setattr(api, "log", logged.append)
+    monkeypatch.setattr(api, "_log", logged.append)
     monkeypatch.setattr(restore_mod.shutil, "rmtree", lambda path: (_ for _ in ()).throw(PermissionError("in use")))
 
     assert api.restore_cancel() == {"ok": True}
 
-    assert len(logged) == 1 and "in use" in logged[0]
+    assert len(logged) == 1 and "cleanup failed (PermissionError)" in logged[0]
     assert api._restore_staging is None

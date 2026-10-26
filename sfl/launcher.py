@@ -99,9 +99,9 @@ def run(description: AppDescription | None = None) -> None:
         zip_recovery = "stopped"
     else:
         try:
-            zip_recovery = zip_restore_recovery.recover(folder, api.log)
+            zip_recovery = zip_restore_recovery.recover(folder, api._log)
         except Exception as error:
-            api.log(f"ZIP restore recovery stopped unexpectedly ({type(error).__name__})")
+            api._log(f"ZIP restore recovery stopped unexpectedly ({type(error).__name__})")
             zip_recovery = "stopped"
     if zip_recovery == "stopped":
         platform_win._show_zip_restore_stopped_error(folder, description.product_name)
@@ -111,7 +111,7 @@ def run(description: AppDescription | None = None) -> None:
     elif zip_recovery == "undone":
         api.add_launch_notice("The backup restore that was interrupted was undone. Your logbook is as it was before.")
     elif zip_recovery == "cleanup_pending":
-        api.log("ZIP restore recovery: live data is correct; leftover cleanup will retry next launch")
+        api._log("ZIP restore recovery: live data is correct; leftover cleanup will retry next launch")
         api.add_launch_notice("Some leftover files from an interrupted backup restore couldn't be removed from the data folder yet. The app will try again next time it opens.")
     prepared = description.prepare_database(api, db_path, description.schema_version)
     if prepared.outcome != "ready":
