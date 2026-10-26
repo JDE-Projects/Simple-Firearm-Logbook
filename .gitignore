@@ -5,9 +5,13 @@ simple_firearm_logbook.damaged-*.db
 simple_firearm_logbook.damaged-*.db-journal
 simple_firearm_logbook.restore.json
 simple_firearm_logbook.restore.json.tmp
+simple_firearm_logbook.lock
 .sfl_launch_restore_*
+.sfl_zip_restore_stage-*
+.sfl_zip_restore_aside-*
 backups/
 photos/
+attachments/
 Debug_Log_*.txt
 *.pref
 
