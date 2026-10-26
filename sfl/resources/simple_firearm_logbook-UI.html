@@ -1904,7 +1904,10 @@ function closeRenameAttachmentModal(){
   pendingRenameAttachmentId = null;
   $("renameAttachmentModalScrim").classList.remove("open");
 }
-async function saveRenameAttachment(){
+function saveRenameAttachment(){
+  return withDialogButtonsDisabled("renameAttachmentModalScrim", saveRenameAttachmentNow);
+}
+async function saveRenameAttachmentNow(){
   if (!api() || !pendingRenameAttachmentId) return;
   const errEl = $("ren-att-err");
   errEl.textContent = "";
@@ -2125,7 +2128,10 @@ function openExportFullModal(){
 function closeExportFullModal(){
   $("exportFullModalScrim").classList.remove("open");
 }
-async function runExportFull(){
+function runExportFull(){
+  return withDialogButtonsDisabled("exportFullModalScrim", runExportFullNow);
+}
+async function runExportFullNow(){
   if (!api()) return;
   const depth = document.querySelector('input[name="photoDepth"]:checked').value;
   const errEl = $("export-full-err");

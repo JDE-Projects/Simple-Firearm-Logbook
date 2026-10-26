@@ -1,6 +1,8 @@
 // ui_drive double-submit scenario for Simple Firearm Logbook. Registers a slow
 // collect hook on each saving dialog through window.SFL, so every save stays
-// in flight for a moment, then clicks the confirm button twice in a row. Each
+// in flight for a moment (Rename document and Export all have no hook, so a
+// slow stand-in replaces their api call instead), then clicks the confirm
+// button twice in a row. Each
 // dialog must run its save once, keep its buttons off while the save runs,
 // and switch them back on afterwards. Uses the CSV import fixture for the
 // import dialog's Open dialog.
@@ -82,7 +84,53 @@ export default async function doubleSubmit(helpers) {
   check("mark as owned: the save ran once", (await collects("markOwned")) === 1, String(await collects("markOwned")));
   check("mark as owned: buttons are back on afterwards", await buttonsBackOn("markOwnedModalScrim"), "");
 
-  // d) delete firearm, with "Export backup first" off so no Save dialog opens
+  // Rename and Export all have no dialog hooks, so a stand-in for their api
+  // call counts each call and holds it for 600 ms instead. The stand-in for
+  // export_full never opens the Save dialog.
+  await evaluate(`(() => {
+    window.slowApi = (method, result) => {
+      window.doubleSubmitDrive[method] = 0;
+      window.pywebview.api[method] = () => {
+        window.doubleSubmitDrive[method] += 1;
+        return new Promise(resolve => setTimeout(() => resolve(result()), 600));
+      };
+    };
+    return true;
+  })()`);
+
+  // d) rename document, against one listed document put in place for the check
+  await evaluate(`(() => {
+    currentAttachments = [{id: 9001, label: 'receipt', seq: 1, size_bytes: 10, missing: false}];
+    renderDocuments();
+    slowApi('rename_attachment', () => ({
+      ok: true, attachments: [{...currentAttachments[0], label: 'renamed receipt'}],
+    }));
+    openRenameAttachmentModal(9001);
+    document.getElementById('ren-att-label').value = 'renamed receipt';
+    return true;
+  })()`);
+  await waitFor(isOpen("renameAttachmentModalScrim"), 5000);
+  const renameOff = await doubleClickConfirm("renameAttachmentModalScrim", "saveRenameAttachment()");
+  check("rename document: buttons are off while saving", renameOff, String(renameOff));
+  await waitFor(`!${isOpen("renameAttachmentModalScrim")}`, 10000);
+  check("rename document: the rename ran once",
+    (await collects("rename_attachment")) === 1, String(await collects("rename_attachment")));
+  check("rename document: buttons are back on afterwards", await buttonsBackOn("renameAttachmentModalScrim"), "");
+
+  // e) Export all
+  await evaluate("slowApi('export_full', () => ({ok: true, path: 'C:\\\\stand-in\\\\export.zip'}))");
+  await evaluate("(() => { openExportFullModal(); return true; })()");
+  await waitFor(isOpen("exportFullModalScrim"), 5000);
+  const exportOff = await doubleClickConfirm("exportFullModalScrim", "runExportFull()");
+  check("export all: buttons are off while exporting", exportOff, String(exportOff));
+  await waitFor("document.getElementById('export-full-note').style.display === 'block'", 10000);
+  check("export all: the export ran once",
+    (await collects("export_full")) === 1, String(await collects("export_full")));
+  check("export all: buttons are back on afterwards", await buttonsBackOn("exportFullModalScrim"), "");
+  await click("#exportFullOkBtn");
+  await waitFor(`!${isOpen("exportFullModalScrim")}`, 5000);
+
+  // f) delete firearm, with "Export backup first" off so no Save dialog opens
   await evaluate("slowHook('deleteFirearm')");
   await click("button[onclick='openDeleteFirearmModal()']");
   await waitFor(isOpen("deleteFirearmModalScrim"), 5000);
@@ -96,7 +144,7 @@ export default async function doubleSubmit(helpers) {
   check("delete firearm: the firearm is gone", (await firearms()).length === before, String((await firearms()).length));
   check("delete firearm: buttons are back on afterwards", await buttonsBackOn("deleteFirearmModalScrim"), "");
 
-  // e) CSV import
+  // g) CSV import
   await evaluate("slowHook('csvImport')");
   await click("button[onclick='openImportModal()']");
   await waitFor(isOpen("importModalScrim"), 5000);
