@@ -115,6 +115,59 @@ def test_no_usable_backup_leaves_every_file_unchanged(tmp_path):
     assert after == before
 
 
+def test_broken_record_link_restores_newest_good_backup(tmp_path):
+    live = tmp_path / config.DB_FILENAME
+    _good(live, "old")
+    conn = sqlite3.connect(live)
+    conn.execute("PRAGMA foreign_keys = OFF")
+    conn.execute("INSERT INTO photos (firearm_id, filename, seq, is_primary) VALUES (99, 'x.jpg', 1, 0)")
+    conn.commit()
+    conn.close()
+    _backup(tmp_path / config.BACKUPS_DIRNAME, "20261027-090500", "backup")
+
+    result = startup.prepare_database(FakeApi(), str(live), config.SCHEMA_VERSION)
+
+    assert result.outcome == "ready"
+    assert result.restore_notice is not None
+    assert result.conn.execute("SELECT log_number FROM firearms").fetchone()[0] == "backup"
+    assert next(tmp_path.glob("simple_firearm_logbook.damaged-*.db")).exists()
+    assert result.conn.execute("PRAGMA foreign_key_check").fetchall() == []
+    result.conn.close()
+
+
+def test_broken_record_link_without_backup_changes_nothing(tmp_path):
+    live = tmp_path / config.DB_FILENAME
+    _good(live, "old")
+    conn = sqlite3.connect(live)
+    conn.execute("PRAGMA foreign_keys = OFF")
+    conn.execute("INSERT INTO photos (firearm_id, filename, seq, is_primary) VALUES (99, 'x.jpg', 1, 0)")
+    conn.commit()
+    conn.close()
+    before = {item.name: item.read_bytes() for item in tmp_path.rglob("*") if item.is_file()}
+
+    result = startup.prepare_database(FakeApi(), str(live), config.SCHEMA_VERSION)
+
+    after = {item.name: item.read_bytes() for item in tmp_path.rglob("*") if item.is_file()}
+    assert result.outcome == "damaged_no_backup"
+    assert after == before
+
+
+def test_newer_database_with_broken_link_reports_newer(tmp_path):
+    live = tmp_path / config.DB_FILENAME
+    _good(live, "old")
+    conn = sqlite3.connect(live)
+    conn.execute("PRAGMA foreign_keys = OFF")
+    conn.execute("INSERT INTO photos (firearm_id, filename, seq, is_primary) VALUES (99, 'x.jpg', 1, 0)")
+    conn.execute(f"PRAGMA user_version = {config.SCHEMA_VERSION + 1}")
+    conn.commit()
+    conn.close()
+
+    result = startup.prepare_database(FakeApi(), str(live), config.SCHEMA_VERSION)
+
+    assert result.outcome == "newer"
+    assert not list(tmp_path.glob("simple_firearm_logbook.damaged-*.db"))
+
+
 def test_live_journal_moves_beside_kept_damaged_file(tmp_path, monkeypatch):
     live, _ = _damaged_with_backup(tmp_path)
     journal = live.with_name(live.name + "-journal")
