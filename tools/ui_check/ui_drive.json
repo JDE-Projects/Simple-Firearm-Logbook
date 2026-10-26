@@ -9,6 +9,11 @@
       "fixture": "tools/ui_check/fixture.py",
       "timeout_s": 120
     },
+    "photo-drop": {
+      "script": "tools/ui_check/photo_drop.js",
+      "fixture": "tools/ui_check/fixture_photo_drop.py",
+      "timeout_s": 120
+    },
     "restore": {
       "script": "tools/ui_check/restore.js",
       "fixture": "tools/ui_check/fixture_restore.py",
