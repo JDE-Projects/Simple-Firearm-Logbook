@@ -292,6 +292,40 @@ def _show_database_damaged_error(path: str, product_name: str = "Simple Firearm 
         pass
 
 
+def _show_damaged_no_backup_error(path: str, folder: str, product_name: str = "Simple Firearm Logbook"):
+    msg = (f"{product_name}'s data file is damaged and can't be opened:\n\n{path}\n\n"
+           f"No usable automatic backup was found in:\n{folder}")
+    try:
+        ctypes.windll.user32.MessageBoxW(0, msg, product_name, 0x10)
+    except Exception:
+        pass
+
+
+def _show_restore_failed_error(path: str, product_name: str = "Simple Firearm Logbook"):
+    msg = (f"{product_name}'s data file is damaged, and restoring it from a backup didn't work. Nothing was changed."
+           f"\n\n{path}\n\nTry opening it again. Don't delete the file: it may still be recoverable.")
+    try:
+        ctypes.windll.user32.MessageBoxW(0, msg, product_name, 0x10)
+    except Exception:
+        pass
+
+
+def _show_restore_stopped_error(folder: str, product_name: str = "Simple Firearm Logbook"):
+    msg = (f"An automatic restore of {product_name}'s data file couldn't be finished. Every file was kept as it is in:\n"
+           f"{folder}\n\nTry opening it again. Don't delete or move any files in that folder.")
+    try:
+        ctypes.windll.user32.MessageBoxW(0, msg, product_name, 0x10)
+    except Exception:
+        pass
+
+
+def _show_restore_complete_info(message: str, product_name: str = "Simple Firearm Logbook"):
+    try:
+        ctypes.windll.user32.MessageBoxW(0, message, product_name, 0x40)
+    except Exception:
+        pass
+
+
 def _show_encrypted_database_error(product_name: str = "Simple Firearm Logbook"):
     msg = (
         "This logbook is protected by Simple Firearm Logbook Pro, so this app can't read it.\n\n"

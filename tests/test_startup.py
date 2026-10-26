@@ -127,7 +127,7 @@ def test_garbage_database_is_damaged_without_changes(tmp_path):
 
     _, result = _prepare(path)
 
-    assert result.outcome == "damaged"
+    assert result.outcome == "damaged_no_backup"
     assert result.conn is None
     assert path.read_bytes() == original
 
@@ -237,7 +237,7 @@ def test_damaged_launch_does_not_sweep(tmp_path, monkeypatch):
 
     _, result = _prepare(path)
 
-    assert result.outcome == "damaged"
+    assert result.outcome == "damaged_no_backup"
     assert swept == []
 
 

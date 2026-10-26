@@ -4,7 +4,7 @@ import sqlite3
 from dataclasses import dataclass
 
 from sfl import config, db
-from sfl.services import launch_backup
+from sfl.services import launch_backup, launch_restore
 from sfl.services import restore as restore_service
 
 
@@ -16,6 +16,7 @@ class PreparedDatabase:
     conn: sqlite3.Connection | None
     detail: str
     notices: tuple[str, ...] = ()
+    restore_notice: str | None = None
 
 
 def _readwrite_uri(path: str) -> str:
@@ -26,20 +27,13 @@ def _readwrite_uri(path: str) -> str:
 
 
 def _readwrite_connection(path: str) -> sqlite3.Connection:
-    conn = sqlite3.connect(
-        _readwrite_uri(path),
-        uri=True,
-        timeout=5.0,
-        check_same_thread=False,
-    )
-    conn.row_factory = sqlite3.Row
-    return conn
+    return launch_restore._readwrite_connection(path)
 
 
 def _result(api, outcome: str, conn: sqlite3.Connection | None, detail: str,
-            notices: tuple[str, ...] = ()) -> PreparedDatabase:
+            notices: tuple[str, ...] = (), restore_notice: str | None = None) -> PreparedDatabase:
     api.log(f"Launch database {outcome}: {detail}")
-    return PreparedDatabase(outcome, conn, detail, notices)
+    return PreparedDatabase(outcome, conn, detail, notices, restore_notice)
 
 
 def _close(conn: sqlite3.Connection | None) -> None:
@@ -72,6 +66,9 @@ def _initialize_database(api, db_path: str, schema_version: int, detail: str) ->
 
 def prepare_database(api, db_path: str, schema_version: int) -> PreparedDatabase:
     """Recover, check, and prepare the live database for a launch."""
+    recovered = launch_restore.recover(api, db_path, schema_version)
+    if recovered is not None:
+        return _result(api, recovered.outcome, recovered.conn, "automatic restore recovery", restore_notice=recovered.notice)
     if not os.path.exists(db_path):
         return _initialize_database(api, db_path, schema_version, "database created for first launch")
 
@@ -97,7 +94,8 @@ def prepare_database(api, db_path: str, schema_version: int) -> PreparedDatabase
         integrity = conn.execute("PRAGMA integrity_check").fetchall()
         if len(integrity) != 1 or integrity[0][0] != "ok":
             _close(conn)
-            return _result(api, "damaged", None, "database integrity check failed")
+            restored = launch_restore.restore_damaged(api, db_path, schema_version)
+            return _result(api, restored.outcome, restored.conn, "database integrity check failed", restore_notice=restored.notice)
         version = conn.execute("PRAGMA user_version").fetchone()[0]
         if version > schema_version:
             _close(conn)
@@ -132,6 +130,9 @@ def prepare_database(api, db_path: str, schema_version: int) -> PreparedDatabase
     except sqlite3.DatabaseError as error:
         _close(conn)
         outcome, detail = _database_error_outcome(error)
+        if outcome == "damaged":
+            restored = launch_restore.restore_damaged(api, db_path, schema_version)
+            return _result(api, restored.outcome, restored.conn, detail, restore_notice=restored.notice)
         return _result(api, outcome, None, detail)
     except Exception as error:
         _close(conn)
