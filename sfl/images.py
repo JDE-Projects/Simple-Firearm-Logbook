@@ -120,22 +120,26 @@ _PHOTO_FAILURE_TEMPLATES = {
         "clause_single": "1 was too large",
         "clause_plural": "{n} were too large",
     },
+    "missing": {
+        "single": "1 file couldn't be found and wasn't added.",
+        "plural": "{n} files couldn't be found and weren't added.",
+        "clause_single": "1 couldn't be found",
+        "clause_plural": "{n} couldn't be found",
+    },
 }
 
 
 def photo_failure_warning(fail_counts):
     """Builds the user-facing warning for refused photos out of a
-    {"not_image": n, "damaged": n, "too_large": n} count dict, so add_photos
-    and add_photos_from_data always word it the same way. Returns None if
-    nothing was refused."""
-    not_image = fail_counts.get("not_image", 0)
-    damaged = fail_counts.get("damaged", 0)
-    too_large = fail_counts.get("too_large", 0)
-    total = not_image + damaged + too_large
+    {"not_image": n, "damaged": n, "too_large": n, "missing": n} count dict,
+    so add_photos and add_photos_from_data always word it the same way.
+    Returns None if nothing was refused."""
+    buckets = [(kind, fail_counts.get(kind, 0)) for kind in _PHOTO_FAILURE_TEMPLATES]
+    buckets = [b for b in buckets if b[1]]
+    total = sum(n for _, n in buckets)
     if total == 0:
         return None
 
-    buckets = [b for b in (("not_image", not_image), ("damaged", damaged), ("too_large", too_large)) if b[1]]
     if len(buckets) == 1:
         kind, n = buckets[0]
         template = _PHOTO_FAILURE_TEMPLATES[kind]

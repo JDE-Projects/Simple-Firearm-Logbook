@@ -65,7 +65,8 @@ def _import_photo_sources(firearm_id, row, cur, seq, has_primary, sources, writt
     never burns a sequence number. Does not commit: the caller commits
     once after this returns. Returns (added, failed, seq, has_primary,
     fail_counts), where fail_counts is a {"not_image": n, "damaged": n,
-    "too_large": n} dict tallying why each refused source failed.
+    "too_large": n, "missing": n} dict tallying why each refused source
+    failed.
 
     `written_paths` is a list the caller owns: each file this call
     successfully writes to disk is appended to it, so the caller can
@@ -76,7 +77,7 @@ def _import_photo_sources(firearm_id, row, cur, seq, has_primary, sources, writt
 
     added = 0
     failed = 0
-    fail_counts = {"not_image": 0, "damaged": 0, "too_large": 0}
+    fail_counts = {"not_image": 0, "damaged": 0, "too_large": 0, "missing": 0}
     for source in sources:
         label = source.get("label", "")
         if source.get("opener") is None:
@@ -161,15 +162,26 @@ def add_photos(conn, window, log, firearm_id):
             "SELECT COUNT(*) FROM photos WHERE firearm_id=? AND is_primary=1", (firearm_id,)
         ).fetchone()[0] > 0
 
-        # A source with an unsupported extension is filtered out here,
-        # silently, same as before the refactor: the file picker's own
-        # filter already keeps this from happening in normal use.
+        # A chosen file that is gone by the time it is read (moved or
+        # deleted after picking), or that has an unsupported extension, is
+        # refused and counted, so the warning names it instead of the
+        # import reporting success with nothing added.
         sources = []
         for src in source_paths:
-            if not src or not os.path.isfile(src):
+            if not src:
+                continue
+            if not os.path.isfile(src):
+                sources.append({
+                    "opener": None, "label": src, "category": "missing",
+                    "skip_reason": "file not found",
+                })
                 continue
             ext = os.path.splitext(src)[1].lower()
             if ext not in config.IMAGE_EXTENSIONS:
+                sources.append({
+                    "opener": None, "label": src, "category": "not_image",
+                    "skip_reason": "not a supported image type",
+                })
                 continue
             sources.append({
                 "opener": src,
