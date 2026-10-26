@@ -1142,6 +1142,16 @@ async function doneDialogHook(name, result, context){
 function callWithExtensionData(method, args, data){
   return data === undefined ? method(...args) : method(...args, data);
 }
+// Switches off every button in a dialog while its save runs, so a second
+// click can't start a second save and Cancel can't close the dialog mid-save.
+// Each button gets back the state it had before, however the save ends.
+async function withDialogButtonsDisabled(scrimId, fn){
+  const buttons = Array.from($(scrimId).querySelectorAll("button"));
+  const before = buttons.map(b => b.disabled);
+  buttons.forEach(b => { b.disabled = true; });
+  try { return await fn(); }
+  finally { buttons.forEach((b, i) => { b.disabled = before[i]; }); }
+}
 let sortCol = "log_number";
 let sortDir = "asc";
 let currentFirearm = null;
@@ -1450,7 +1460,10 @@ function onTrustChange(){
 function onNfaChange(){
   $("ff-nfa-fields").style.display = $("ff-nfa").checked ? "block" : "none";
 }
-async function saveFirearm(){
+function saveFirearm(){
+  return withDialogButtonsDisabled("firearmModalScrim", saveFirearmNow);
+}
+async function saveFirearmNow(){
   if (!api()) return;
   const errEl = $("ff-err");
   errEl.textContent = "";
@@ -1593,7 +1606,10 @@ async function openDispositionModal(){
 function closeDispositionModal(){
   $("dispositionModalScrim").classList.remove("open");
 }
-async function saveDisposition(){
+function saveDisposition(){
+  return withDialogButtonsDisabled("dispositionModalScrim", saveDispositionNow);
+}
+async function saveDispositionNow(){
   if (!api() || !currentFirearm) return;
   const errEl = $("dp-err");
   errEl.textContent = "";
@@ -1963,7 +1979,10 @@ async function openMarkOwnedModal(){
 function closeMarkOwnedModal(){
   $("markOwnedModalScrim").classList.remove("open");
 }
-async function confirmMarkOwned(){
+function confirmMarkOwned(){
+  return withDialogButtonsDisabled("markOwnedModalScrim", confirmMarkOwnedNow);
+}
+async function confirmMarkOwnedNow(){
   if (!api() || !currentFirearm) return;
   const errEl = $("mark-owned-err");
   errEl.textContent = "";
@@ -1998,7 +2017,10 @@ async function openDeleteFirearmModal(){
 function closeDeleteFirearmModal(){
   $("deleteFirearmModalScrim").classList.remove("open");
 }
-async function confirmDeleteFirearm(){
+function confirmDeleteFirearm(){
+  return withDialogButtonsDisabled("deleteFirearmModalScrim", confirmDeleteFirearmNow);
+}
+async function confirmDeleteFirearmNow(){
   if (!api() || !currentFirearm) return;
   const errEl = $("del-firearm-err");
   errEl.textContent = "";
@@ -2273,7 +2295,10 @@ function importGoBack(){
   renderImportMapStep();
 }
 
-async function runImportCommit(){
+function runImportCommit(){
+  return withDialogButtonsDisabled("importModalScrim", runImportCommitNow);
+}
+async function runImportCommitNow(){
   if (!api()) return;
   const errEl = $("import-err");
   errEl.textContent = "";
@@ -2399,15 +2424,19 @@ function runRestoreProceed(){
 async function restoreBackupFirstChoice(choice){
   $("restoreBackupFirstModalScrim").classList.remove("open");
   if (choice === "cancel") return;
-  if (choice === "yes"){
-    if (!api()) return;
-    const r = await api().create_backup();
-    if (!r || r.cancelled || !r.ok){
-      $("restore-err").textContent = "Backup wasn't saved, so the restore was cancelled. Nothing was changed.";
-      return;
+  // The restore dialog's buttons stay off from here until the restore ends,
+  // covering the backup-first copy as well as the restore itself.
+  await withDialogButtonsDisabled("restoreModalScrim", async () => {
+    if (choice === "yes"){
+      if (!api()) return;
+      const r = await api().create_backup();
+      if (!r || r.cancelled || !r.ok){
+        $("restore-err").textContent = "Backup wasn't saved, so the restore was cancelled. Nothing was changed.";
+        return;
+      }
     }
-  }
-  doRestoreCommit();
+    await doRestoreCommit();
+  });
 }
 
 async function doRestoreCommit(){
