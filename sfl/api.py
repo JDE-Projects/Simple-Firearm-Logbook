@@ -7,7 +7,7 @@ import os
 import sqlite3
 import threading
 
-from sfl import config, db, paths
+from sfl import config, db, paths, platform_win
 from sfl.debug_log import DebugLog
 from sfl.services import attachments as attachments_service
 from sfl.services import backup as backup_service
@@ -326,6 +326,16 @@ class Api:
         try:
             self.close_conn()
             result = restore_service.restore_commit(staging, self.log)
+            if result.get("recovery_required"):
+                platform_win._show_zip_restore_recovery_required_error(
+                    paths.app_dir(), self._app_description.product_name if self._app_description else "Simple Firearm Logbook"
+                )
+                if self._window is not None:
+                    try:
+                        self._window.destroy()
+                    except Exception as error:
+                        self.log(f"restore_commit: couldn't close window after recovery-required result: {error}")
+                return result
             db_path = os.path.join(paths.app_dir(), config.DB_FILENAME)
             try:
                 opener = self._app_description.open_database if self._app_description else db.open_db

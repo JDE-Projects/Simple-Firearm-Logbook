@@ -11,6 +11,7 @@ import os
 import shutil
 import sqlite3
 import tempfile
+import uuid
 import time
 import zipfile
 
@@ -18,6 +19,7 @@ import webview
 
 from sfl import config, paths
 from sfl import storage
+from sfl.services import zip_restore_recovery
 from sfl.utils import sha256_hex
 
 STAGING_PREFIX = "sfl_restore_"
@@ -41,7 +43,8 @@ def restore_pick(window, log, schema_version=config.SCHEMA_VERSION):
         path = result[0] if isinstance(result, (list, tuple)) else result
         if not path:
             return {"ok": True, "cancelled": True}
-        staging_dir = tempfile.mkdtemp(prefix=STAGING_PREFIX)
+        staging_dir = os.path.join(paths.app_dir(), f".sfl_zip_restore_stage-{uuid.uuid4().hex[:8]}")
+        os.mkdir(staging_dir)
         outcome = inspect_backup(path, staging_dir, log, schema_version)
         if not outcome.get("ok"):
             _cleanup_path(staging_dir, log)
@@ -224,46 +227,52 @@ def restore_commit(staging_dir, log):
 
     base = paths.app_dir()
     live_db = os.path.join(base, config.DB_FILENAME)
-    live_photos = os.path.join(base, config.PHOTOS_DIRNAME)
-    live_attachments = os.path.join(base, config.ATTACHMENTS_DIRNAME)
-    staged_photos = os.path.join(staging_dir, config.PHOTOS_DIRNAME)
-    staged_attachments = os.path.join(staging_dir, config.ATTACHMENTS_DIRNAME)
-
     try:
-        aside_dir = tempfile.mkdtemp(prefix="sfl_restore_aside_", dir=base)
-    except OSError as e:
-        log(f"restore_commit: couldn't create the set-aside folder: {e}")
-        return {"ok": False, "error": "Couldn't start the restore." + not_changed}
-    moved_aside = []  # (aside_path, original_path), in the order they were moved
-
-    try:
-        for original, name in (
-            (live_db, config.DB_FILENAME),
-            (live_photos, config.PHOTOS_DIRNAME),
-            (live_attachments, config.ATTACHMENTS_DIRNAME),
-        ):
-            if os.path.exists(original):
-                aside_path = os.path.join(aside_dir, name)
-                shutil.move(original, aside_path)
-                moved_aside.append((aside_path, original))
+        record = zip_restore_recovery.make_record(base, staging_dir)
+        for _, filename, kind in zip_restore_recovery.PARTS:
+            staged = os.path.join(staging_dir, filename)
+            if kind == "file" and os.path.isfile(staged):
+                zip_restore_recovery._fsync_file(staged)
+        aside_dir = os.path.join(base, record["aside_name"])
+        os.mkdir(aside_dir)
+        zip_restore_recovery.write_record(base, record)
+        for name, filename, _kind in zip_restore_recovery.PARTS:
+            live = os.path.join(base, filename)
+            if record["parts"][name]["live"]:
+                os.replace(live, os.path.join(aside_dir, filename))
+        for name, filename, _kind in zip_restore_recovery.PARTS:
+            staged = os.path.join(staging_dir, filename)
+            if record["parts"][name]["staged"]:
+                os.replace(staged, os.path.join(base, filename))
+        record = {**record, "stage": "swapped"}
+        zip_restore_recovery.write_record(base, record)
+        completion = zip_restore_recovery.complete_swapped(base, record)
+        if completion == "mismatch":
+            return {"ok": False, "recovery_required": True, "error": f"Restore needs recovery. Files were kept in {base}."}
+        if completion == "cleanup_pending":
+            log("restore_commit: swap completed; cleanup will retry at next launch")
     except Exception as e:
-        log(f"restore_commit: couldn't set the current logbook aside: {e}")
-        return _undo_swap(moved_aside, aside_dir, log, "Couldn't replace the current logbook." + not_changed)
-
-    try:
-        shutil.move(staged_db, live_db)
-        if os.path.isdir(staged_photos):
-            shutil.move(staged_photos, live_photos)
-        if os.path.isdir(staged_attachments):
-            shutil.move(staged_attachments, live_attachments)
-    except Exception as e:
-        log(f"restore_commit: failed moving the backup into place, rolling back: {e}")
-        for path in (live_db, live_photos, live_attachments):
-            _cleanup_path(path, log)
-        return _undo_swap(moved_aside, aside_dir, log, "Couldn't restore the backup." + not_changed)
-
-    _cleanup_path(aside_dir, log)
-    _cleanup_path(staging_dir, log)
+        log(f"restore_commit: swap failed: {e}")
+        if not os.path.exists(zip_restore_recovery.record_path(base)):
+            return {"ok": False, "error": "Couldn't start the restore." + not_changed}
+        try:
+            record = zip_restore_recovery.read_record(base)
+            if record is None:
+                raise OSError("restore record is unavailable")
+            zip_restore_recovery.write_record(base, {**record, "stage": "aborting"})
+            if not zip_restore_recovery.undo(base, {**record, "stage": "aborting"}):
+                # The originals are back but the leftovers couldn't be
+                # deleted: the record says rolled_back, so the next launch
+                # finishes the cleanup and the logbook is unchanged now.
+                rolled_back = zip_restore_recovery.read_record(base)
+                if not (rolled_back and rolled_back["stage"] == "rolled_back"
+                        and zip_restore_recovery._live_matches(base, rolled_back, "live")):
+                    raise OSError("undo did not complete")
+                log("restore_commit: undo completed; cleanup will retry at next launch")
+        except Exception as undo_error:
+            log(f"restore_commit: recovery required: {undo_error}")
+            return {"ok": False, "recovery_required": True, "error": f"Restore needs recovery. Files were kept in {base}."}
+        return {"ok": False, "error": "Couldn't restore the backup." + not_changed}
 
     counts = {}
     try:
@@ -300,55 +309,20 @@ def _sqlite_opens_cleanly(db_path, log, context):
         return False
 
 
-def _undo_swap(moved_aside, aside_dir, log, error):
-    """Rolls a failed swap back and returns the failure result. When every
-    original went back, the set-aside folder is removed and the result
-    carries error. Otherwise the folder is kept, since it holds the only
-    copy of what didn't go back, and the error names it."""
-    if not _rollback(moved_aside, log):
-        log(f"restore_commit: originals kept in {aside_dir}")
-        return {
-            "ok": False,
-            "error": (
-                "Restore failed. The logbook could not be fully put back. "
-                f"The original files are in {aside_dir}."
-            ),
-            "kept_folder": aside_dir,
-        }
-    _cleanup_path(aside_dir, log)
-    return {"ok": False, "error": error}
-
-
-def _rollback(moved_aside, log):
-    """Puts every moved-aside original back where it came from, in reverse
-    order. Best-effort: a failure here is logged, never raised, since this
-    already runs from inside another failure's handling. Returns True only
-    when every original went back."""
-    complete = True
-    for aside_path, original in reversed(moved_aside):
-        try:
-            _cleanup_path(original, log)
-            if os.path.exists(original):
-                # shutil.move would nest the original inside the leftover
-                # folder instead of putting it back, so count it as failed.
-                raise OSError(f"couldn't clear {original} before moving it back")
-            shutil.move(aside_path, original)
-        except Exception as e:
-            log(f"restore_commit: rollback failed for {original}: {e}")
-            complete = False
-    return complete
-
-
 def discard_staging(staging_dir, log):
     """Deletes a staged backup that is no longer needed: a cancelled
-    preview, or a restore that finished or failed. A failure is logged,
-    and the launch sweep retries the folder on a later start."""
+    preview, or a restore that finished or failed. A folder still named
+    in a zip-restore record is left for launch recovery. A failure is
+    logged, and launch removes the unrecorded folder on a later start."""
+    base = os.path.dirname(staging_dir)
+    if os.path.basename(staging_dir) in zip_restore_recovery.record_names(base):
+        return
     _cleanup_path(staging_dir, log)
 
 
 def sweep_stale_staging(log, temp_dir=None, now=None):
-    """Deletes restore staging folders left in the temp folder by an app
-    that never cleared them (a crash, or Windows ending the process).
+    """Deletes restore staging folders left in the temp folder by an older
+    build that never cleared them (a crash, or Windows ending the process).
     Only folders named with STAGING_PREFIX are touched, never links, and
     never one modified within STALE_STAGING_SECONDS."""
     temp_dir = temp_dir or tempfile.gettempdir()

@@ -12,7 +12,7 @@ from sfl.api import Api
 from sfl.db import open_db
 from sfl.paths import app_dir, resource_path
 from sfl.remote_debug import strip_remote_debugging
-from sfl.services import launch_restore
+from sfl.services import launch_restore, zip_restore_recovery
 from sfl.storage import Storage, install as install_storage
 
 
@@ -95,6 +95,24 @@ def run(description: AppDescription | None = None) -> None:
     api.set_app_description(description)
     api.prune_debug_logs()
     db_path = os.path.join(folder, config.DB_FILENAME)
+    if os.path.exists(zip_restore_recovery.record_path(folder)) and os.path.exists(launch_restore._record_path(db_path)):
+        zip_recovery = "stopped"
+    else:
+        try:
+            zip_recovery = zip_restore_recovery.recover(folder, api.log)
+        except Exception as error:
+            api.log(f"ZIP restore recovery stopped unexpectedly ({type(error).__name__})")
+            zip_recovery = "stopped"
+    if zip_recovery == "stopped":
+        platform_win._show_zip_restore_stopped_error(folder, description.product_name)
+        sys.exit(1)
+    if zip_recovery == "finished":
+        api.add_launch_notice("The backup restore that was interrupted has finished.")
+    elif zip_recovery == "undone":
+        api.add_launch_notice("The backup restore that was interrupted was undone. Your logbook is as it was before.")
+    elif zip_recovery == "cleanup_pending":
+        api.log("ZIP restore recovery: live data is correct; leftover cleanup will retry next launch")
+        api.add_launch_notice("Some leftover files from an interrupted backup restore couldn't be removed from the data folder yet. The app will try again next time it opens.")
     prepared = description.prepare_database(api, db_path, description.schema_version)
     if prepared.outcome != "ready":
         if prepared.outcome == "unavailable":
