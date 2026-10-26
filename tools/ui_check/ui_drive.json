@@ -29,6 +29,16 @@
       "fixture": "tools/ui_check/fixture_restore.py",
       "timeout_s": 120
     },
+    "double-submit": {
+      "script": "tools/ui_check/double_submit.js",
+      "fixture": "tools/ui_check/fixture_csv_import.py",
+      "timeout_s": 120
+    },
+    "double-submit-restore": {
+      "script": "tools/ui_check/double_submit_restore.js",
+      "fixture": "tools/ui_check/fixture_restore.py",
+      "timeout_s": 120
+    },
     "window-fit": {
       "script": "tools/ui_check/window_fit.js",
       "fixture": "tools/ui_check/fixture_window_fit.py",
