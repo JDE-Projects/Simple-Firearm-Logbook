@@ -15,6 +15,10 @@ from sfl import config
 # photo import everywhere in the app.
 Image.MAX_IMAGE_PIXELS = 32_000_000
 
+# Only decode formats photo import accepts, so a crafted file in another
+# format never reaches Pillow's other decoders.
+PHOTO_FORMATS = ("JPEG", "PNG", "GIF", "BMP", "WEBP", "TIFF")
+
 
 def _photo_source_too_large(path: str) -> bool:
     """Decompression-bomb guard: refuse a photo source bigger than
@@ -69,7 +73,7 @@ def optimize_image_to_jpeg(src: str, max_edge: int = config.PHOTO_MAX_EDGE,
     can refuse to store a broken or oversized photo rather than pretend the
     import worked.
     """
-    with Image.open(src) as opened:
+    with Image.open(src, formats=PHOTO_FORMATS) as opened:
         # Honor the orientation a phone camera records in EXIF, so a photo that
         # looks upright in the gallery isn't stored sideways.
         img = ImageOps.exif_transpose(opened)
