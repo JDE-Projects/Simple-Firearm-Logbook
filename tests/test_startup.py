@@ -30,6 +30,7 @@ def test_missing_database_is_created_and_ready(tmp_path):
     assert result.outcome == "ready"
     assert result.conn is not None
     assert path.exists()
+    assert not (tmp_path / config.BACKUPS_DIRNAME).exists()
     assert result.conn.execute("SELECT name FROM sqlite_master WHERE name='firearms'").fetchone()
     assert api.messages[-1].startswith("Launch database ready:")
     result.conn.close()
@@ -53,6 +54,7 @@ def test_zero_byte_database_is_initialized(tmp_path):
 
     assert result.outcome == "ready"
     assert result.conn.execute("SELECT name FROM sqlite_master WHERE name='firearms'").fetchone()
+    assert not (tmp_path / config.BACKUPS_DIRNAME).exists()
     result.conn.close()
 
 
@@ -64,6 +66,7 @@ def test_schema_empty_database_is_initialized(tmp_path):
 
     assert result.outcome == "ready"
     assert result.conn.execute("SELECT name FROM sqlite_master WHERE name='firearms'").fetchone()
+    assert not (tmp_path / config.BACKUPS_DIRNAME).exists()
     result.conn.close()
 
 

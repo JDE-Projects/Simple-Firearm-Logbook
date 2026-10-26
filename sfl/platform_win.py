@@ -320,6 +320,18 @@ def _show_newer_schema_error(product_name: str = "Simple Firearm Logbook", opene
         pass
 
 
+def _show_upgrade_blocked_error(folder: str, product_name: str = "Simple Firearm Logbook"):
+    msg = (
+        f"{product_name} needs to update its data file, but couldn't save a backup of it first:\n\n"
+        f"{folder}\n\nNothing has been changed. Make sure the folder isn't read-only and the drive has "
+        "free space, then try again."
+    )
+    try:
+        ctypes.windll.user32.MessageBoxW(0, msg, product_name, 0x10)
+    except Exception:
+        pass
+
+
 _mutex_handle = None   # module-level: must live for the process lifetime
 _folder_lock_handle = None  # module-level: must live for the process lifetime
 

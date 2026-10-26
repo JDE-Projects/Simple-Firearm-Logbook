@@ -20,6 +20,18 @@ class SaveRejected(Exception):
     """Raised by an embedding app to refuse a pending firearm save."""
 
 
+ENSURE_COLUMNS = (
+    ("firearms", "insured_value", "TEXT NOT NULL DEFAULT ''"),
+    ("firearms", "storage_location", "TEXT NOT NULL DEFAULT ''"),
+    ("firearms", "sub_type", "TEXT NOT NULL DEFAULT ''"),
+    ("firearms", "held_in_trust", "INTEGER NOT NULL DEFAULT 0"),
+    ("firearms", "trust_name", "TEXT NOT NULL DEFAULT ''"),
+    ("firearms", "is_nfa", "INTEGER NOT NULL DEFAULT 0"),
+    ("firearms", "nfa_form_type", "TEXT NOT NULL DEFAULT ''"),
+    ("firearms", "nfa_stamp_date", "TEXT NOT NULL DEFAULT ''"),
+)
+
+
 def _ensure_column(conn, table: str, column: str, decl: str) -> None:
     """Add a column to an existing table only if it isn't already there.
     Additive-only: never rewrites or drops. Safe to call on every open."""
@@ -115,18 +127,29 @@ def ensure_schema(conn, schema_version=SCHEMA_VERSION) -> None:
     # rewrite), matching the rest of the JDE-Projects fleet. These columns are
     # backward compatible (an older build tolerates the extra columns), so they
     # do not bump SCHEMA_VERSION.
-    _ensure_column(conn, "firearms", "insured_value", "TEXT NOT NULL DEFAULT ''")
-    _ensure_column(conn, "firearms", "storage_location", "TEXT NOT NULL DEFAULT ''")
-    _ensure_column(conn, "firearms", "sub_type", "TEXT NOT NULL DEFAULT ''")
-    _ensure_column(conn, "firearms", "held_in_trust", "INTEGER NOT NULL DEFAULT 0")
-    _ensure_column(conn, "firearms", "trust_name", "TEXT NOT NULL DEFAULT ''")
-    _ensure_column(conn, "firearms", "is_nfa", "INTEGER NOT NULL DEFAULT 0")
-    _ensure_column(conn, "firearms", "nfa_form_type", "TEXT NOT NULL DEFAULT ''")
-    _ensure_column(conn, "firearms", "nfa_stamp_date", "TEXT NOT NULL DEFAULT ''")
+    for table, column, decl in ENSURE_COLUMNS:
+        _ensure_column(conn, table, column, decl)
 
     if existing_version < SCHEMA_VERSION:
         conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     storage.current().commit(conn)
+
+
+def schema_would_change(conn, schema_version: int) -> bool:
+    """Whether ensure_schema would create or add anything to this database."""
+    tables = {
+        row["name"] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    }
+    required_tables = {"firearms", "photos", "attachments", "counters"}
+    if not required_tables.issubset(tables):
+        return True
+    for table, column, _ in ENSURE_COLUMNS:
+        columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in columns:
+            return True
+    if conn.execute("SELECT 1 FROM counters WHERE id=1").fetchone() is None:
+        return True
+    return conn.execute("PRAGMA user_version").fetchone()[0] < schema_version
 
 
 def _get_next_log_number(cur) -> str:

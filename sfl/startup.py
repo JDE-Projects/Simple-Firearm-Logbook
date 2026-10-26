@@ -1,10 +1,10 @@
 """Database preparation performed before the logbook window is created."""
 import os
 import sqlite3
-import urllib.parse
 from dataclasses import dataclass
 
 from sfl import config, db
+from sfl.services import launch_backup
 from sfl.services import restore as restore_service
 
 
@@ -15,16 +15,14 @@ class PreparedDatabase:
     outcome: str
     conn: sqlite3.Connection | None
     detail: str
+    notices: tuple[str, ...] = ()
 
 
 def _readwrite_uri(path: str) -> str:
     """SQLite URI that opens an existing file read-write and never creates it.
     A network path (\\\\server\\share) gets an empty authority, file:////server,
     because SQLite drops a URI's authority and would lose the server name."""
-    path = os.path.abspath(path).replace("\\", "/")
-    if path.startswith("//"):
-        path = "//" + path
-    return "file:" + urllib.parse.quote(path) + "?mode=rw"
+    return launch_backup.database_uri(path, "rw")
 
 
 def _readwrite_connection(path: str) -> sqlite3.Connection:
@@ -38,9 +36,10 @@ def _readwrite_connection(path: str) -> sqlite3.Connection:
     return conn
 
 
-def _result(api, outcome: str, conn: sqlite3.Connection | None, detail: str) -> PreparedDatabase:
+def _result(api, outcome: str, conn: sqlite3.Connection | None, detail: str,
+            notices: tuple[str, ...] = ()) -> PreparedDatabase:
     api.log(f"Launch database {outcome}: {detail}")
-    return PreparedDatabase(outcome, conn, detail)
+    return PreparedDatabase(outcome, conn, detail, notices)
 
 
 def _close(conn: sqlite3.Connection | None) -> None:
@@ -109,10 +108,27 @@ def prepare_database(api, db_path: str, schema_version: int) -> PreparedDatabase
             conn = db.open_db(db_path, schema_version)
             restore_service.sweep_stale_staging(api.log)
             return _result(api, "ready", conn, "schema-empty database initialized for first launch")
+        backup = launch_backup.create_launch_backup(conn, db_path, schema_version)
+        if not backup.ok:
+            api.log(f"Launch backup failed: {backup.detail}")
+            if db.schema_would_change(conn, schema_version):
+                _close(conn)
+                return _result(api, "upgrade_blocked", None, backup.detail)
+            notice = (
+                f"Today's backup of your logbook couldn't be saved to {backup.folder}. "
+                "Your logbook opened normally."
+            )
+            notices = (notice,)
+        elif backup.prune_failed:
+            api.log(f"Launch backup prune failed: {backup.detail}")
+            notices = (f"Older backups in {backup.folder} couldn't be cleaned up.",)
+        else:
+            api.log(f"Launch backup saved: {backup.folder}")
+            notices = ()
         conn.execute("PRAGMA foreign_keys = ON")
         db.ensure_schema(conn, schema_version)
         restore_service.sweep_stale_staging(api.log)
-        return _result(api, "ready", conn, "database recovered, checked, and prepared")
+        return _result(api, "ready", conn, "database recovered, checked, and prepared", notices)
     except sqlite3.DatabaseError as error:
         _close(conn)
         outcome, detail = _database_error_outcome(error)

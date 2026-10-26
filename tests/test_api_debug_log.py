@@ -44,6 +44,20 @@ def test_debug_warning_queues_then_flushes_and_uses_safe_javascript():
     assert window.calls[-1] == f"showDebugWarning({json.dumps('shown immediately')}, false);"
 
 
+def test_launch_notices_queue_until_load_and_join_into_one_toast():
+    api = Api()
+    window = FakeWindow()
+    api.set_window(window)
+
+    api.add_launch_notice("first warning")
+    api.add_launch_notice("second warning")
+    assert window.calls == []
+
+    api.flush_debug_warnings()
+
+    assert window.calls == [f"showToast({json.dumps('first warning second warning')});"]
+
+
 def test_debug_warning_while_logging_keeps_switch_on(monkeypatch, tmp_path):
     monkeypatch.setattr(paths, "app_dir", lambda: str(tmp_path))
     api = Api()
