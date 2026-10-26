@@ -13,10 +13,11 @@ slides sideways at non-100% scaling.
 """
 import ctypes
 import ctypes.wintypes as wintypes
+import msvcrt
 import os
 import time
 
-from sfl import prefs
+from sfl import config, prefs
 
 
 def _win32():
@@ -257,6 +258,51 @@ def _show_write_error(folder: str, product_name: str = "Simple Firearm Logbook")
         pass
 
 
+def _show_already_running_error(folder: str, product_name: str = "Simple Firearm Logbook"):
+    msg = (
+        f"{product_name} is already running, or another copy of it is using this data folder:\n\n"
+        f"{folder}\n\nClose the other copy and try again."
+    )
+    try:
+        ctypes.windll.user32.MessageBoxW(0, msg, product_name, 0x10)
+    except Exception:
+        pass
+
+
+def _show_database_unavailable_error(path: str, product_name: str = "Simple Firearm Logbook"):
+    msg = (
+        f"{product_name} couldn't open its data file right now:\n\n{path}\n\n"
+        "Another program may be using it, such as a backup or sync tool, or the drive may be "
+        "unavailable. Close that program or reconnect the drive, then try again."
+    )
+    try:
+        ctypes.windll.user32.MessageBoxW(0, msg, product_name, 0x10)
+    except Exception:
+        pass
+
+
+def _show_database_damaged_error(path: str, product_name: str = "Simple Firearm Logbook"):
+    msg = (
+        f"{product_name}'s data file is damaged and can't be opened:\n\n{path}\n\n"
+        "The file has been left exactly as it is. Don't delete it: it may still be recoverable."
+    )
+    try:
+        ctypes.windll.user32.MessageBoxW(0, msg, product_name, 0x10)
+    except Exception:
+        pass
+
+
+def _show_encrypted_database_error(product_name: str = "Simple Firearm Logbook"):
+    msg = (
+        "This logbook is protected by Simple Firearm Logbook Pro, so this app can't read it.\n\n"
+        "Open it in Simple Firearm Logbook Pro."
+    )
+    try:
+        ctypes.windll.user32.MessageBoxW(0, msg, product_name, 0x10)
+    except Exception:
+        pass
+
+
 def _show_newer_schema_error(product_name: str = "Simple Firearm Logbook", opened_by_pro=False):
     if opened_by_pro:
         msg = (
@@ -275,6 +321,29 @@ def _show_newer_schema_error(product_name: str = "Simple Firearm Logbook", opene
 
 
 _mutex_handle = None   # module-level: must live for the process lifetime
+_folder_lock_handle = None  # module-level: must live for the process lifetime
+
+
+def _acquire_folder_lock(folder: str) -> bool:
+    """Keep an exclusive byte-range lock for this data folder's lifetime."""
+    global _folder_lock_handle
+    handle = None
+    try:
+        handle = open(os.path.join(folder, config.LOCK_FILENAME), "a+b")
+        if handle.tell() == 0:
+            handle.write(b"\0")
+            handle.flush()
+        handle.seek(0)
+        msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        _folder_lock_handle = handle
+        return True
+    except Exception:
+        if handle is not None:
+            try:
+                handle.close()
+            except Exception:
+                pass
+        return False
 
 
 def _acquire_single_instance(mutex_name: str) -> bool:
