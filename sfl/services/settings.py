@@ -1,6 +1,7 @@
 """App-level settings and misc bridge helpers: theme preference, opening a
 link in the system browser, and the GitHub update check."""
 import json
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -64,11 +65,14 @@ def check_update(log):
         result["version"] = latest
         if latest and _is_newer(latest, config.APP_VERSION):
             result["update"] = True
-        log(f"check_update: found v{latest}, current v{config.APP_VERSION}")
+        if re.fullmatch(r"\d+(\.\d+){0,3}", latest):
+            log(f"check_update: found v{latest}, current v{config.APP_VERSION}")
+        else:
+            log("check_update: found an unrecognized version tag")
     except Exception as e:
         result["offline"] = True
         result["reason"] = _update_error_reason(e)
-        log(f"check_update failed: {type(e).__name__}: {e}")
+        log(f"check_update failed ({type(e).__name__})")
     return result
 
 

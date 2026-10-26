@@ -269,7 +269,8 @@ def test_prune_warning_is_also_written_into_active_log(tmp_path, monkeypatch):
     assert dbg.set_enabled(True)
 
     assert len(warnings) == 1
-    assert os.path.basename(str(locked)) in read(dbg._path)
+    assert "WARNING" in read(dbg._path)
+    assert os.path.basename(str(locked)) not in read(dbg._path)
 
 
 def test_reenable_after_write_failure_starts_a_fresh_file(tmp_path, monkeypatch):

@@ -55,7 +55,7 @@ def _import_photo_sources(firearm_id, row, cur, seq, has_primary, sources, writt
         reaching that step (bad extension, undecodable data, etc.);
       - "too_large": True if the source has already been measured and is
         over MAX_IMAGE_BYTES, so it must be refused before it is opened;
-      - "label": a name to use in log lines;
+      - "label": the source's name, never written to the log;
       - "skip_reason": only used when "opener" is None, a short phrase
         describing why for the log line.
 
@@ -79,20 +79,18 @@ def _import_photo_sources(firearm_id, row, cur, seq, has_primary, sources, writt
     failed = 0
     fail_counts = {"not_image": 0, "damaged": 0, "too_large": 0, "missing": 0}
     for source in sources:
-        label = source.get("label", "")
         if source.get("opener") is None:
             # Already failed before reaching the optimize step: never
             # burns a sequence number.
             failed += 1
             fail_counts[source.get("category", "damaged")] += 1
-            reason = source.get("skip_reason", "unreadable")
-            log(f"Photo skipped, {reason}: {os.path.basename(label)}")
+            log(f"Photo skipped, {source.get('skip_reason', 'unreadable')}")
             continue
         if source.get("too_large"):
             # Refuse to even open it: never burns a sequence number.
             failed += 1
             fail_counts["too_large"] += 1
-            log(f"Photo skipped, over the size limit: {os.path.basename(label)}")
+            log("Photo skipped, over the size limit")
             continue
         seq += 1
         target_name = f"{row['log_number']}_{seq}.jpg"
@@ -105,7 +103,7 @@ def _import_photo_sources(firearm_id, row, cur, seq, has_primary, sources, writt
             seq -= 1
             failed += 1
             fail_counts["damaged"] += 1
-            log(f"Photo optimize failed for {os.path.basename(label)}: {e}")
+            log(f"Photo optimize failed ({type(e).__name__})")
             try:
                 if os.path.exists(target_full):
                     storage.current().remove(target_full)
@@ -203,7 +201,7 @@ def add_photos(conn, window, log, firearm_id):
                 storage.current().remove(p)
             except Exception:
                 pass
-        log(f"add_photos failed: {e}")
+        log(f"add_photos failed ({type(e).__name__})")
         return {"ok": False, "error": "Couldn't add the photo(s)."}
 
 
@@ -284,7 +282,7 @@ def add_photos_from_data(conn, log, firearm_id, files):
                 storage.current().remove(p)
             except Exception:
                 pass
-        log(f"add_photos_from_data failed: {e}")
+        log(f"add_photos_from_data failed ({type(e).__name__})")
         return {"ok": False, "error": "Couldn't add the photo(s)."}
 
 
@@ -310,7 +308,7 @@ def delete_photo(conn, log, photo_id):
             try:
                 storage.current().remove(full)
             except Exception as e:
-                log(f"Deleted photo {photo_id}, but couldn't remove file {full}: {e}")
+                log(f"Deleted photo {photo_id}, but couldn't remove its file ({type(e).__name__})")
                 warning = (
                     "The photo was deleted, but its file could not be removed from disk. "
                     "See the log for details."
@@ -322,7 +320,7 @@ def delete_photo(conn, log, photo_id):
         return result
     except Exception as e:
         conn.rollback()
-        log(f"delete_photo failed: {e}")
+        log(f"delete_photo failed ({type(e).__name__})")
         return {"ok": False, "error": "Couldn't delete the photo."}
 
 
@@ -340,7 +338,7 @@ def set_primary_photo(conn, log, photo_id):
         return {"ok": True, "photos": _get_photos(conn, firearm_id)}
     except Exception as e:
         conn.rollback()
-        log(f"set_primary_photo failed: {e}")
+        log(f"set_primary_photo failed ({type(e).__name__})")
         return {"ok": False, "error": "Couldn't set the primary photo."}
 
 
@@ -358,5 +356,5 @@ def get_photo_data(log, filename):
         b64 = base64.b64encode(data).decode("ascii")
         return {"ok": True, "data_uri": f"data:{mime};base64,{b64}"}
     except Exception as e:
-        log(f"get_photo_data failed: {e}")
+        log(f"get_photo_data failed ({type(e).__name__})")
         return {"ok": False, "error": "Couldn't load that photo."}

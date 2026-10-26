@@ -88,7 +88,7 @@ def test_run_uses_custom_api_and_database_preparer_and_sets_config(monkeypatch, 
         def set_window(self, win):
             calls["window"] = win
 
-        def log(self, msg):
+        def _log(self, msg):
             calls.setdefault("log", []).append(msg)
 
         def prune_debug_logs(self):
@@ -297,7 +297,7 @@ def test_cleanup_pending_launch_carries_on_with_notice(monkeypatch, tmp_path):
         def prune_debug_logs(self):
             pass
 
-        def log(self, message):
+        def _log(self, message):
             calls["logs"].append(message)
 
         def add_launch_notice(self, message):

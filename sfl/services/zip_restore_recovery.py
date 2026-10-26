@@ -207,6 +207,6 @@ def _remove_unrecorded(folder, log):
             if entry.is_symlink() or getattr(entry, "is_junction", lambda: False)() or not entry.is_dir(follow_symlinks=False):
                 continue
             if not _delete(entry.path):
-                log(f"ZIP restore recovery: couldn't remove preview folder {entry.name}")
+                log("ZIP restore recovery: couldn't remove preview folder")
         except OSError:
-            log(f"ZIP restore recovery: couldn't inspect preview folder {entry.name}")
+            log("ZIP restore recovery: couldn't inspect preview folder")

@@ -48,10 +48,10 @@ class DebugLog:
         # Every warning reaches the app's UI. While logging is on it is also
         # written into the active log, so the file keeps a trace of it. A write
         # failure turns logging off first, so this never loops.
-        for message in warnings:
+        for message, log_message in warnings:
             self._warn(message)
             if self._on:
-                self.log("WARNING", message)
+                self.log("WARNING", log_message)
 
     def is_enabled(self):
         return self._on
@@ -68,9 +68,10 @@ class DebugLog:
                 warnings.extend(self._prune_locked(new_path))
                 size = self._write_new_file(new_path)
                 if size is None:
-                    warnings.append(
-                        f"Debug log: could not create {os.path.basename(new_path)}. Logging stayed off."
-                    )
+                    warnings.append((
+                        f"Debug log: could not create {os.path.basename(new_path)}. Logging stayed off.",
+                        "Debug log: could not create a log file. Logging stayed off.",
+                    ))
                     self._on = False
                     ok = False
                 else:
@@ -109,9 +110,10 @@ class DebugLog:
                         self._on = False
                         self._path = None
                         fatal = True
-                        warnings.append(
-                            f"Debug log: could not start a new log file ({os.path.basename(new_path)}). Logging turned off."
-                        )
+                        warnings.append((
+                            f"Debug log: could not start a new log file ({os.path.basename(new_path)}). Logging turned off.",
+                            "Debug log: could not start a new log file. Logging turned off.",
+                        ))
                     else:
                         self._path = new_path
                         self._current_size = size
@@ -132,7 +134,10 @@ class DebugLog:
                         name = os.path.basename(self._path)
                         self._on = False
                         self._path = None
-                        warnings.append(f"Debug log: write failed for {name} ({e.strerror or e}). Logging turned off.")
+                        warnings.append((
+                            f"Debug log: write failed for {name} ({e.strerror or e}). Logging turned off.",
+                            f"Debug log: write failed ({type(e).__name__}). Logging turned off.",
+                        ))
         self._emit(warnings)
 
     def _format_core(self, ts, label, content):
@@ -187,7 +192,10 @@ class DebugLog:
         try:
             entries = list(os.scandir(self.log_dir))
         except OSError as e:
-            return [f"Debug log: could not check {self.log_dir} for old logs ({e.strerror or e})."]
+            return [(
+                f"Debug log: could not check {self.log_dir} for old logs ({e.strerror or e}).",
+                f"Debug log: could not check the log folder for old logs ({type(e).__name__}).",
+            )]
 
         active_norm = os.path.normcase(os.path.abspath(active_path)) if active_path else None
 
@@ -244,7 +252,8 @@ class DebugLog:
                 name = os.path.basename(path)
                 if name not in self._warned_names:
                     self._warned_names.add(name)
-                    warnings.append(
-                        f"Debug log: could not delete old log {name} (it may be open in another program). Will retry later."
-                    )
+                    warnings.append((
+                        f"Debug log: could not delete old log {name} (it may be open in another program). Will retry later.",
+                        "Debug log: could not delete an old log. Will retry later.",
+                    ))
         return warnings

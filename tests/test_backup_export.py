@@ -136,7 +136,7 @@ def test_missing_file_is_recorded_and_backup_still_produced(tmp_path, monkeypatc
         result = _write_backup_zip(conn, str(dest), log)
         assert result["ok"], result
         assert result["missing"] == [photo_filename]
-        assert any(photo_filename in m for m in messages)
+        assert "Backup: referenced file missing on disk" in messages
 
         with zipfile.ZipFile(str(dest)) as zf:
             names = set(zf.namelist())

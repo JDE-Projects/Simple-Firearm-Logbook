@@ -112,7 +112,7 @@ class Api:
         return extension_service.read_extension_files(
             self._app_description.extension_script,
             self._app_description.extension_stylesheet,
-            self.log,
+            self._log,
         )
 
     def close_conn(self):
@@ -124,10 +124,10 @@ class Api:
 
     # --- config -------------------------------------------------------------
     def get_config(self):
-        return firearms_service.get_config(self.log)
+        return firearms_service.get_config(self._log)
 
     def get_autocomplete(self):
-        return firearms_service.get_autocomplete(self._conn, self.log)
+        return firearms_service.get_autocomplete(self._conn, self._log)
 
     # --- firearms -------------------------------------------------------------
     def _get_firearm_row(self, firearm_id):
@@ -143,10 +143,10 @@ class Api:
         """Override point an embedding app can use before a firearm save commits."""
 
     def list_firearms(self):
-        return firearms_service.list_firearms(self._conn, self.log)
+        return firearms_service.list_firearms(self._conn, self._log)
 
     def get_firearm(self, firearm_id):
-        return firearms_service.get_firearm(self._conn, firearm_id, self.log)
+        return firearms_service.get_firearm(self._conn, firearm_id, self._log)
 
     def create_firearm(self, make, model, serial_number="", firearm_type="", caliber="",
                         acquisition_date="", acquired_from="", purchase_price="",
@@ -154,7 +154,7 @@ class Api:
                         sub_type="", held_in_trust=0, trust_name="", is_nfa=0,
                         nfa_form_type="", nfa_stamp_date="", extension_data=None):
         return firearms_service.create_firearm(
-            self._conn, self.log, make, model, serial_number, firearm_type, caliber,
+            self._conn, self._log, make, model, serial_number, firearm_type, caliber,
             acquisition_date, acquired_from, purchase_price,
             estimated_value, insured_value, storage_location, notes,
             sub_type, held_in_trust, trust_name, is_nfa,
@@ -170,7 +170,7 @@ class Api:
         """Edits identity/notes fields only; log number and disposition are
         untouched (disposition has its own editing action)."""
         return firearms_service.update_firearm(
-            self._conn, self.log, firearm_id, make, model, serial_number, firearm_type, caliber,
+            self._conn, self._log, firearm_id, make, model, serial_number, firearm_type, caliber,
             acquisition_date, acquired_from, purchase_price,
             estimated_value, insured_value, storage_location, notes,
             sub_type, held_in_trust, trust_name, is_nfa,
@@ -184,7 +184,7 @@ class Api:
         clears the rest of the disposition fields, since the UI hides them
         once a firearm is owned again."""
         return firearms_service.update_disposition(
-            self._conn, self.log, firearm_id, status, date, to, address, amount, notes,
+            self._conn, self._log, firearm_id, status, date, to, address, amount, notes,
             extension_data=extension_data, before_save=self._before_save,
         )
 
@@ -194,14 +194,14 @@ class Api:
         produced (with its own save dialog) before anything is deleted;
         cancelling that save dialog cancels the whole delete."""
         return firearms_service.delete_firearm(
-            self._conn, self._window, self.log, firearm_id, export_backup_first,
+            self._conn, self._window, self._log, firearm_id, export_backup_first,
             extension_data=extension_data, before_save=self._before_save,
         )
 
     # --- photos -----------------------------------------------------------------
     def _import_photo_sources(self, firearm_id, row, cur, seq, has_primary, sources, written_paths):
         return photos_service._import_photo_sources(
-            firearm_id, row, cur, seq, has_primary, sources, written_paths, self.log
+            firearm_id, row, cur, seq, has_primary, sources, written_paths, self._log
         )
 
     def _photo_import_result(self, firearm_id, added, fail_counts):
@@ -211,7 +211,7 @@ class Api:
         """Opens a native multi-select file picker, copies each chosen image
         into photos\\ under the {lognum}_{seq} naming scheme, and inserts a
         row per photo. The first photo added becomes primary if none is set."""
-        return photos_service.add_photos(self._conn, self._window, self.log, firearm_id)
+        return photos_service.add_photos(self._conn, self._window, self._log, firearm_id)
 
     def add_photos_from_data(self, firearm_id, files):
         """Imports photos from raw bytes instead of a file path, for a
@@ -220,20 +220,20 @@ class Api:
         dicts. Shares the naming scheme, sequence numbering, and
         first-photo-becomes-primary rule with add_photos via
         _import_photo_sources, so nothing can drift between the two."""
-        return photos_service.add_photos_from_data(self._conn, self.log, firearm_id, files)
+        return photos_service.add_photos_from_data(self._conn, self._log, firearm_id, files)
 
     def delete_photo(self, photo_id):
-        return photos_service.delete_photo(self._conn, self.log, photo_id)
+        return photos_service.delete_photo(self._conn, self._log, photo_id)
 
     def set_primary_photo(self, photo_id):
-        return photos_service.set_primary_photo(self._conn, self.log, photo_id)
+        return photos_service.set_primary_photo(self._conn, self._log, photo_id)
 
     def get_photo_data(self, filename):
         """Returns a photo's bytes as a base64 data URI for in-app display.
         Images are stored next to the exe (not bundled), so this is the one
         reliable way to show them from a UI file that may itself be running
         out of a PyInstaller temp folder."""
-        return photos_service.get_photo_data(self.log, filename)
+        return photos_service.get_photo_data(self._log, filename)
 
     def _photo_with_data(self, p: dict) -> dict:
         return photos_service._photo_with_data(p)
@@ -246,37 +246,37 @@ class Api:
         """Step one of the two-step add flow: opens a native multi-select file
         picker (any file type) and reports back name/size/too_large for each
         chosen file, without copying anything yet."""
-        return attachments_service.choose_attachments(self._window, self.log)
+        return attachments_service.choose_attachments(self._window, self._log)
 
     def add_attachments(self, firearm_id, paths):
         """Copies the given file paths into attachments\\ verbatim (never
         opened, recompressed, or validated as images) under the
         {lognum}_{seq} naming scheme, and inserts a row per file with a
         default label built from the original filename."""
-        return attachments_service.add_attachments(self._conn, self.log, firearm_id, paths)
+        return attachments_service.add_attachments(self._conn, self._log, firearm_id, paths)
 
     def rename_attachment(self, attachment_id, new_label):
-        return attachments_service.rename_attachment(self._conn, self.log, attachment_id, new_label)
+        return attachments_service.rename_attachment(self._conn, self._log, attachment_id, new_label)
 
     def open_attachment(self, attachment_id):
         """Opens a document with the OS default handler. Falls back to
         revealing it in File Explorer if there's no associated program."""
-        return attachments_service.open_attachment(self._conn, self.log, attachment_id)
+        return attachments_service.open_attachment(self._conn, self._log, attachment_id)
 
     def delete_attachment(self, attachment_id):
-        return attachments_service.delete_attachment(self._conn, self.log, attachment_id)
+        return attachments_service.delete_attachment(self._conn, self._log, attachment_id)
 
     def save_attachment_copy(self, attachment_id):
         """Copies a document's original file out to a location the user
         picks, for use from the delete-document confirmation ('save a copy
         first') so a deletion is never the only chance to keep the file."""
-        return attachments_service.save_attachment_copy(self._conn, self._window, self.log, attachment_id)
+        return attachments_service.save_attachment_copy(self._conn, self._window, self._log, attachment_id)
 
     # --- exports ------------------------------------------------------------
     def export_single_html(self, firearm_id):
         """Self-contained single-firearm export: one HTML file with photos
         embedded as base64 data URIs, so it can be opened or shared standalone."""
-        return export_service.export_single_html(self._conn, self._window, self.log, firearm_id)
+        return export_service.export_single_html(self._conn, self._window, self._log, firearm_id)
 
     def export_single_backup_zip(self, firearm_id):
         return self._export_single_backup_zip_internal(firearm_id)
@@ -285,7 +285,7 @@ class Api:
         """Zip containing the self-contained HTML plus the original photo
         files. Shared by the standalone export action and the delete flow's
         'export backup first' option."""
-        return export_service._export_single_backup_zip_internal(self._conn, self._window, self.log, firearm_id)
+        return export_service._export_single_backup_zip_internal(self._conn, self._window, self._log, firearm_id)
 
     def export_full(self, photo_depth="primary"):
         """Full collection export: one zip with an all-firearms HTML report,
@@ -293,14 +293,14 @@ class Api:
         photo_depth controls how many photos per firearm are included:
         'primary', 'all', or 'none'. Documents have no depth selector and are
         always fully included; they're the point of the backup."""
-        return export_service.export_full(self._conn, self._window, self.log, photo_depth)
+        return export_service.export_full(self._conn, self._window, self._log, photo_depth)
 
     # --- backup ---------------------------------------------------------------
     def create_backup(self):
         """Complete, restorable archive: a safe SQLite copy of the database
         plus every photo and document file it references, with a manifest.
         Separate from the exports above, which are share/print output."""
-        return backup_service.create_backup(self._conn, self._window, self.log)
+        return backup_service.create_backup(self._conn, self._window, self._log)
 
     # --- restore ----------------------------------------------------------------
     def restore_pick(self):
@@ -309,7 +309,7 @@ class Api:
         replaced yet; the UI shows a preview next. Holds the staging path
         on the Api until restore_commit or restore_cancel."""
         schema_version = (self._app_description.schema_version if self._app_description else config.SCHEMA_VERSION)
-        result = restore_service.restore_pick(self._window, self.log, schema_version)
+        result = restore_service.restore_pick(self._window, self._log, schema_version)
         if result.get("ok") and result.get("staging"):
             self._restore_staging = result["staging"]
         return result
@@ -325,7 +325,7 @@ class Api:
         self._restore_running = True
         try:
             self.close_conn()
-            result = restore_service.restore_commit(staging, self.log)
+            result = restore_service.restore_commit(staging, self._log)
             if result.get("recovery_required"):
                 platform_win._show_zip_restore_recovery_required_error(
                     paths.app_dir(), self._app_description.product_name if self._app_description else "Simple Firearm Logbook"
@@ -334,7 +334,7 @@ class Api:
                     try:
                         self._window.destroy()
                     except Exception as error:
-                        self.log(f"restore_commit: couldn't close window after recovery-required result: {error}")
+                        self._log(f"restore_commit: couldn't close window after recovery-required result ({type(error).__name__})")
                 return result
             db_path = os.path.join(paths.app_dir(), config.DB_FILENAME)
             try:
@@ -342,14 +342,14 @@ class Api:
                 schema_version = (self._app_description.schema_version if self._app_description else config.SCHEMA_VERSION)
                 self.set_conn(opener(db_path, schema_version))
             except Exception as e:
-                self.log(f"restore_commit: couldn't reopen the database: {e}")
+                self._log(f"restore_commit: couldn't reopen the database ({type(e).__name__})")
                 if result.get("ok"):
                     result = {"ok": False, "error": "The restore finished but the app couldn't reopen the database. Restart the app."}
             return result
         finally:
             # A failed restore leaves its staged copy behind, and a window
             # closed mid-restore skipped discarding it, so it goes here.
-            restore_service.discard_staging(staging, self.log)
+            restore_service.discard_staging(staging, self._log)
             self._restore_staging = None
             self._restore_running = False
 
@@ -357,7 +357,7 @@ class Api:
         """Discards a staged backup the user picked but didn't commit, so
         its temp folder doesn't linger."""
         if self._restore_staging:
-            restore_service.discard_staging(self._restore_staging, self.log)
+            restore_service.discard_staging(self._restore_staging, self._log)
             self._restore_staging = None
         return {"ok": True}
 
@@ -366,7 +366,7 @@ class Api:
         user left open. A restore that is still copying files in is left
         to finish, since deleting its staging folder would make it fail."""
         if self._restore_running:
-            self.log("close_restore: a restore is still running, leaving its staging folder")
+            self._log("close_restore: a restore is still running, leaving its staging folder")
             return
         self.restore_cancel()
 
@@ -379,7 +379,7 @@ class Api:
         extension_fields = (
             self._app_description.import_extension_fields if self._app_description else ()
         )
-        return imports_service.import_csv_pick(self._window, self.log, extension_fields)
+        return imports_service.import_csv_pick(self._window, self._log, extension_fields)
 
     def import_csv_preview(self, rows, mapping):
         """Stage 2: run every row through the shared validators and classify
@@ -390,7 +390,7 @@ class Api:
             self._app_description.import_extension_fields if self._app_description else ()
         )
         return imports_service.import_csv_preview(
-            self._conn, self.log, rows, mapping, extension_fields
+            self._conn, self._log, rows, mapping, extension_fields
         )
 
     def import_csv_commit(self, records, extension_data=None):
@@ -400,7 +400,7 @@ class Api:
         number; an imported Log Number column is never honored. The core
         ignores extension_data."""
         return imports_service.import_csv_commit(
-            self._conn, self.log, records, before_save=self._before_save
+            self._conn, self._log, records, before_save=self._before_save
         )
 
     # --- preferences (local file, not stored in the db) ----------------------
@@ -411,17 +411,17 @@ class Api:
         return settings_service.get_theme()
 
     def save_theme(self, theme: str):
-        return settings_service.save_theme(self.log, theme)
+        return settings_service.save_theme(self._log, theme)
 
     # --- misc bridge helpers --------------------------------------------------
     def open_url(self, url: str):
         """Open a link in the system browser, never by navigating the app window."""
-        return settings_service.open_url(self.log, url)
+        return settings_service.open_url(self._log, url)
 
     def check_update(self):
         """Compare the latest published release to APP_VERSION. Quiet in the UI on
         failure (see _update_error_reason), but always logged when debug is on."""
-        return settings_service.check_update(self.log)
+        return settings_service.check_update(self._log)
 
     @staticmethod
     def _is_newer(latest: str, current: str) -> bool:
@@ -433,14 +433,22 @@ class Api:
         if not self._debug_log.set_enabled(on):
             return {"ok": False, "error": "Couldn't start debug logging."}
         if on and not was_enabled:
-            self.log("Debug log started")
+            self._log("Debug log started")
         return {"ok": True}
 
-    def log(self, msg: str):
+    def _log(self, msg):
         # Privacy rule for every call site: this app has no credentials, but
         # keep entries to ids, counts, and status words, not free-text notes
         # or personal details the user typed in.
         self._debug_log.log(msg)
+
+    def log(self, msg):
+        # This page-facing path records only message length; internal code uses _log.
+        try:
+            length = len(str(msg))
+        except Exception:
+            length = 0
+        self._log(f"Page reported a message ({length} chars)")
 
     def prune_debug_logs(self):
         self._debug_log.prune()

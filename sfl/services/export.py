@@ -44,7 +44,7 @@ def export_single_html(conn, window, log, firearm_id):
         log(f"Exported single firearm HTML for {f['log_number']}")
         return {"ok": True, "path": path}
     except Exception as e:
-        log(f"export_single_html failed: {e}")
+        log(f"export_single_html failed ({type(e).__name__})")
         return {"ok": False, "error": "Couldn't export the HTML file."}
 
 
@@ -94,7 +94,7 @@ def _export_single_backup_zip_internal(conn, window, log, firearm_id):
         log(f"Exported backup zip for firearm {f['log_number']}")
         return {"ok": True, "path": path}
     except Exception as e:
-        log(f"export_single_backup_zip failed: {e}")
+        log(f"export_single_backup_zip failed ({type(e).__name__})")
         return {"ok": False, "error": "Couldn't create the backup zip."}
 
 
@@ -156,5 +156,5 @@ def export_full(conn, window, log, photo_depth="primary"):
         log(f"Full export created, photo depth={photo_depth}, {len(firearms)} firearm(s)")
         return {"ok": True, "path": path}
     except Exception as e:
-        log(f"export_full failed: {e}")
+        log(f"export_full failed ({type(e).__name__})")
         return {"ok": False, "error": "Couldn't create the export."}

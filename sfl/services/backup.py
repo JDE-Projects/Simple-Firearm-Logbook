@@ -35,7 +35,7 @@ def create_backup(conn, window, log):
         outcome["path"] = path
         return outcome
     except Exception as e:
-        log(f"create_backup failed: {e}")
+        log(f"create_backup failed ({type(e).__name__})")
         return {"ok": False, "error": "Couldn't create the backup."}
 
 
@@ -71,7 +71,7 @@ def _write_backup_zip(conn, dest_path, log):
             for stored_filename, full in files_to_include:
                 if not full or not os.path.isfile(full):
                     missing.append(stored_filename)
-                    log(f"Backup: referenced file missing on disk: {stored_filename}")
+                    log("Backup: referenced file missing on disk")
                     continue
                 arcname = stored_filename.replace("\\", "/")
                 file_bytes = storage.current().read_bytes(full)
@@ -101,5 +101,5 @@ def _write_backup_zip(conn, dest_path, log):
         log(f"Backup created: {counts['firearms']} firearm(s), {len(missing)} missing file(s)")
         return {"ok": True, "missing": missing, "counts": counts}
     except Exception as e:
-        log(f"_write_backup_zip failed: {e}")
+        log(f"_write_backup_zip failed ({type(e).__name__})")
         return {"ok": False, "error": "Couldn't create the backup."}

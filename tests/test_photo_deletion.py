@@ -30,7 +30,7 @@ def test_delete_photo_warns_when_file_cannot_be_removed(tmp_path, monkeypatch):
         assert result["ok"] is True
         assert result["photos"] == []
         assert "warning" in result
-        assert any(str(full) in message for message in logs)
+        assert "Deleted photo 1, but couldn't remove its file (OSError)" in logs
     finally:
         conn.close()
 
