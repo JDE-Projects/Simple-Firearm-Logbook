@@ -18,7 +18,7 @@ export default async function windowFit(helpers) {
   const s = JSON.parse(size);
 
   check(`the window fits the screen: ${size}`, s.w <= s.availW && s.h <= s.availH, size);
-  // A skipped restore leaves the default 1150 x 760 window, which would also
+  // A skipped restore leaves the default 1280 x 820 window, which would also
   // fit, so confirm the saved size was applied and then cut to the screen.
   check("the window was sized from the saved position, not the default",
     s.w >= s.availW - 40 && s.h >= s.availH - 80, size);
