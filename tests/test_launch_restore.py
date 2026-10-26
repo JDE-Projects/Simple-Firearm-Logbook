@@ -168,6 +168,52 @@ def test_newer_database_with_broken_link_reports_newer(tmp_path):
     assert not list(tmp_path.glob("simple_firearm_logbook.damaged-*.db"))
 
 
+def _failing_integrity(path):
+    """A database SQLite opens and reads, but whose integrity check fails: an
+    index is redefined over a different column, so its entries no longer match
+    the table's rows."""
+    _good(path, "old")
+    conn = sqlite3.connect(path)
+    conn.execute("CREATE INDEX test_index ON firearms(make)")
+    conn.commit()
+    conn.execute("PRAGMA writable_schema = ON")
+    conn.execute("UPDATE sqlite_master SET sql = 'CREATE INDEX test_index ON firearms(model)' WHERE name = 'test_index'")
+    conn.commit()
+    conn.close()
+    conn = sqlite3.connect(path)
+    assert conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok"
+    conn.close()
+
+
+def test_failed_integrity_check_restores_newest_good_backup(tmp_path):
+    live = tmp_path / config.DB_FILENAME
+    _failing_integrity(live)
+    original = live.read_bytes()
+    _backup(tmp_path / config.BACKUPS_DIRNAME, "20261027-090500", "backup")
+    api = FakeApi()
+
+    result = startup.prepare_database(api, str(live), config.SCHEMA_VERSION)
+
+    assert result.outcome == "ready"
+    assert result.restore_notice is not None
+    assert result.conn.execute("SELECT log_number FROM firearms").fetchone()[0] == "backup"
+    assert next(tmp_path.glob("simple_firearm_logbook.damaged-*.db")).read_bytes() == original
+    assert any("database integrity check failed" in message for message in api.messages)
+    result.conn.close()
+
+
+def test_failed_integrity_check_without_backup_changes_nothing(tmp_path):
+    live = tmp_path / config.DB_FILENAME
+    _failing_integrity(live)
+    before = {item.name: item.read_bytes() for item in tmp_path.rglob("*") if item.is_file()}
+
+    result = startup.prepare_database(FakeApi(), str(live), config.SCHEMA_VERSION)
+
+    after = {item.name: item.read_bytes() for item in tmp_path.rglob("*") if item.is_file()}
+    assert result.outcome == "damaged_no_backup"
+    assert after == before
+
+
 def test_live_journal_moves_beside_kept_damaged_file(tmp_path, monkeypatch):
     live, _ = _damaged_with_backup(tmp_path)
     journal = live.with_name(live.name + "-journal")
