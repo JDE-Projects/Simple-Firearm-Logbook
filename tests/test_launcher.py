@@ -4,8 +4,7 @@ import sys
 
 import pytest
 
-from sfl import config, launcher
-from sfl.db import NewerSchemaError
+from sfl import config, launcher, startup
 
 
 def test_default_description_matches_current_app_values():
@@ -22,6 +21,7 @@ def test_default_description_matches_current_app_values():
     )
     assert description.api_class is launcher.Api
     assert description.open_database is launcher.open_db
+    assert description.prepare_database is launcher.startup.prepare_database
     assert description.schema_version == config.SCHEMA_VERSION
     assert description.extension_script is None
     assert description.extension_stylesheet is None
@@ -63,7 +63,7 @@ def test_run_turns_off_qt_shader_disk_cache_unless_already_set(monkeypatch, befo
     assert seen == [after]
 
 
-def test_run_uses_custom_api_and_database_opener_and_sets_config(monkeypatch, tmp_path):
+def test_run_uses_custom_api_and_database_preparer_and_sets_config(monkeypatch, tmp_path):
     calls = {}
     monkeypatch.setattr(config, "APP_VERSION", config.APP_VERSION)
     monkeypatch.setattr(config, "GITHUB_OWNER", config.GITHUB_OWNER)
@@ -104,10 +104,10 @@ def test_run_uses_custom_api_and_database_opener_and_sets_config(monkeypatch, tm
             calls["closed"] = True
             calls.setdefault("order", []).append("close_conn")
 
-    def open_database(path, schema_version):
+    def prepare_database(api, path, schema_version):
         calls["db_path"] = path
         calls["schema_version"] = schema_version
-        return "connection"
+        return startup.PreparedDatabase("ready", "connection", "test connection")
 
     description = launcher.AppDescription(
         product_name="Embedding Logbook",
@@ -118,7 +118,7 @@ def test_run_uses_custom_api_and_database_opener_and_sets_config(monkeypatch, tm
         update_repo="example-repo",
         update_link="https://example.invalid/update",
         api_class=FakeApi,
-        open_database=open_database,
+        prepare_database=prepare_database,
     )
     monkeypatch.setattr(launcher, "app_dir", lambda: str(tmp_path))
     monkeypatch.setattr(
@@ -127,6 +127,7 @@ def test_run_uses_custom_api_and_database_opener_and_sets_config(monkeypatch, tm
         lambda name: calls.setdefault("mutex", name) and True,
     )
     monkeypatch.setattr(launcher.platform_win, "_writable_check", lambda folder: folder == str(tmp_path))
+    monkeypatch.setattr(launcher.platform_win, "_acquire_folder_lock", lambda folder: True)
     monkeypatch.setattr(launcher.platform_win, "_restore_geometry", lambda win: None)
     monkeypatch.setattr(launcher.platform_win, "_save_geometry", lambda win: None)
     monkeypatch.setattr(
@@ -135,11 +136,6 @@ def test_run_uses_custom_api_and_database_opener_and_sets_config(monkeypatch, tm
         lambda *args, **kwargs: calls.setdefault("window_args", (args, kwargs)) and FakeWindow(),
     )
     monkeypatch.setattr(launcher.webview, "start", lambda **kwargs: calls.setdefault("start", kwargs))
-    monkeypatch.setattr(
-        launcher.restore_service,
-        "sweep_stale_staging",
-        lambda log: calls.setdefault("swept_with", log),
-    )
 
     launcher.run(description)
 
@@ -151,7 +147,6 @@ def test_run_uses_custom_api_and_database_opener_and_sets_config(monkeypatch, tm
     assert calls["window_args"][0][0] == "Embedding Logbook"
     assert calls["start"]["gui"] == "qt"
     assert calls["closed"] is True
-    assert calls["swept_with"].__name__ == "log"
     assert calls["pruned"] is True
     assert calls["order"] == ["close_restore", "close_conn"]
     assert config.APP_VERSION == "9.8.7"
@@ -159,7 +154,17 @@ def test_run_uses_custom_api_and_database_opener_and_sets_config(monkeypatch, tm
     assert config.GITHUB_REPO == "example-repo"
 
 
-def test_run_reports_newer_schema_from_custom_database_opener(monkeypatch, tmp_path):
+@pytest.mark.parametrize(
+    ("outcome", "message_name", "message_args"),
+    [
+        ("unavailable", "_show_database_unavailable_error", ("Embedding Logbook",)),
+        ("damaged", "_show_database_damaged_error", ("Embedding Logbook",)),
+        ("encrypted", "_show_encrypted_database_error", ("Embedding Logbook",)),
+        ("pro_stamped", "_show_newer_schema_error", ("Embedding Logbook", True)),
+        ("newer", "_show_newer_schema_error", ("Embedding Logbook", False)),
+    ],
+)
+def test_run_reports_non_ready_database_outcome(monkeypatch, tmp_path, outcome, message_name, message_args):
     monkeypatch.setattr(config, "APP_VERSION", config.APP_VERSION)
     monkeypatch.setattr(config, "GITHUB_OWNER", config.GITHUB_OWNER)
     monkeypatch.setattr(config, "GITHUB_REPO", config.GITHUB_REPO)
@@ -171,25 +176,52 @@ def test_run_reports_newer_schema_from_custom_database_opener(monkeypatch, tmp_p
         update_owner="example-owner",
         update_repo="example-repo",
         update_link="https://example.invalid/update",
-        open_database=lambda path, schema_version: (_ for _ in ()).throw(
-            NewerSchemaError(opened_by_pro=True)
-        ),
+        prepare_database=lambda api, path, schema_version: startup.PreparedDatabase(outcome, None, "test"),
     )
     calls = []
     monkeypatch.setattr(launcher, "app_dir", lambda: str(tmp_path))
     monkeypatch.setattr(launcher.platform_win, "_acquire_single_instance", lambda name: True)
     monkeypatch.setattr(launcher.platform_win, "_writable_check", lambda folder: True)
-    monkeypatch.setattr(
-        launcher.platform_win,
-        "_show_newer_schema_error",
-        lambda name, opened_by_pro: calls.append((name, opened_by_pro)),
-    )
+    monkeypatch.setattr(launcher.platform_win, "_acquire_folder_lock", lambda folder: True)
+    monkeypatch.setattr(launcher.platform_win, message_name, lambda *args: calls.append(args))
 
     with pytest.raises(SystemExit) as exited:
         launcher.run(description)
 
     assert exited.value.code == 1
-    assert calls == [("Embedding Logbook", True)]
+    if outcome in {"unavailable", "damaged"}:
+        assert calls == [(os.path.join(str(tmp_path), config.DB_FILENAME), *message_args)]
+    else:
+        assert calls == [message_args]
+
+
+def test_run_stops_when_single_instance_cannot_be_focused(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(launcher.platform_win, "_acquire_single_instance", lambda name: False)
+    monkeypatch.setattr(launcher.platform_win, "_focus_existing_window", lambda name: False)
+    monkeypatch.setattr(launcher, "app_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(launcher.platform_win, "_show_already_running_error", lambda *args: calls.append(args))
+
+    with pytest.raises(SystemExit) as exited:
+        launcher.run()
+
+    assert exited.value.code == 1
+    assert calls == [(str(tmp_path), "Simple Firearm Logbook")]
+
+
+def test_run_stops_when_folder_lock_is_refused(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(launcher, "app_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(launcher.platform_win, "_acquire_single_instance", lambda name: True)
+    monkeypatch.setattr(launcher.platform_win, "_writable_check", lambda folder: True)
+    monkeypatch.setattr(launcher.platform_win, "_acquire_folder_lock", lambda folder: False)
+    monkeypatch.setattr(launcher.platform_win, "_show_already_running_error", lambda *args: calls.append(args))
+
+    with pytest.raises(SystemExit) as exited:
+        launcher.run()
+
+    assert exited.value.code == 1
+    assert calls == [(str(tmp_path), "Simple Firearm Logbook")]
 
 
 @pytest.mark.parametrize(
