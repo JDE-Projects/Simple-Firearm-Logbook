@@ -106,6 +106,10 @@ def prepare_database(api, db_path: str, schema_version: int) -> PreparedDatabase
             conn = db.open_db(db_path, schema_version)
             restore_service.sweep_stale_staging(api._log)
             return _result(api, "ready", conn, "schema-empty database initialized for first launch")
+        if conn.execute("PRAGMA foreign_key_check").fetchone() is not None:
+            _close(conn)
+            restored = launch_restore.restore_damaged(api, db_path, schema_version)
+            return _result(api, restored.outcome, restored.conn, "database record link check failed", restore_notice=restored.notice)
         backup = launch_backup.create_launch_backup(conn, db_path, schema_version)
         if not backup.ok:
             api._log(f"Launch backup failed: {backup.detail}")
