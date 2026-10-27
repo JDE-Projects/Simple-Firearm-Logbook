@@ -74,6 +74,11 @@
       "fixture": "tools/ui_check/fixture_launch_restore.py",
       "timeout_s": 120
     },
+    "launch-restore-link": {
+      "script": "tools/ui_check/launch_restore.js",
+      "fixture": "tools/ui_check/fixture_launch_restore_link.py",
+      "timeout_s": 120
+    },
     "bottom-bar": {
       "script": "tools/ui_check/bottom_bar.js",
       "fixture": "tools/ui_check/fixture_bottom_bar.py",

@@ -1,9 +1,9 @@
 // ui_drive restore-close scenario for Simple Firearm Logbook. Uses the
 // restore fixture: picks the backup through the real Open dialog and leaves
 // the preview open, so the driver closes the app mid-preview. The scenario
-// reports the temp folder the backup was unpacked into; the person running
-// the check confirms that folder is gone once the app has closed, since a
-// scenario cannot look after the app exits.
+// reports the staging folder beside the data that the backup was unpacked
+// into; the person running the check confirms that folder is gone once the
+// app has closed, since a scenario cannot look after the app exits.
 
 export default async function restoreClose(helpers) {
   const { click, evaluate, waitFor, check, screenshot, fixture } = helpers;
@@ -21,6 +21,6 @@ export default async function restoreClose(helpers) {
 
   const staging = await evaluate("RESTORE.staging");
   check(`the backup was unpacked for the preview: ${staging}`,
-    typeof staging === "string" && /sfl_restore_/.test(staging), String(staging));
+    typeof staging === "string" && /\.sfl_zip_restore_stage-/.test(staging), String(staging));
   await screenshot("restore-preview-left-open");
 }
