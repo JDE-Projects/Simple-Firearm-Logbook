@@ -152,6 +152,16 @@ def schema_would_change(conn, schema_version: int) -> bool:
     return conn.execute("PRAGMA user_version").fetchone()[0] < schema_version
 
 
+def has_user_records(conn) -> bool:
+    """Whether the logbook holds a firearm or has ever issued a log number.
+    An emptied logbook still counts, because its next log number is never
+    reissued. Raises if the tables cannot be read."""
+    if conn.execute("SELECT 1 FROM firearms LIMIT 1").fetchone() is not None:
+        return True
+    row = conn.execute("SELECT next_log_number FROM counters WHERE id=1").fetchone()
+    return row is not None and row[0] > 1
+
+
 def _get_next_log_number(cur) -> str:
     """Return the next log number, zero-padded to 5 digits, and advance the
     counter. Numbers are simple sequential. The counter bump and the insert

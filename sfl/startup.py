@@ -110,23 +110,23 @@ def prepare_database(api, db_path: str, schema_version: int) -> PreparedDatabase
             _close(conn)
             restored = launch_restore.restore_damaged(api, db_path, schema_version)
             return _result(api, restored.outcome, restored.conn, "database record link check failed", restore_notice=restored.notice)
-        backup = launch_backup.create_launch_backup(conn, db_path, schema_version)
-        if not backup.ok:
-            api._log(f"Launch backup failed: {backup.detail}")
-            if db.schema_would_change(conn, schema_version):
-                _close(conn)
-                return _result(api, "upgrade_blocked", None, backup.detail)
-            notice = (
-                f"Today's backup of your logbook couldn't be saved to {backup.folder}. "
-                "Your logbook opened normally."
-            )
-            notices = (notice,)
-        elif backup.prune_failed:
-            api._log(f"Launch backup prune failed: {backup.detail}")
-            notices = (f"Older backups in {backup.folder} couldn't be cleaned up.",)
-        else:
-            api._log("Launch backup saved")
+        try:
+            needs_backup = db.has_user_records(conn)
+        except Exception as error:
+            # A failed check must not cost the user a backup.
+            api._log(f"Launch backup record check failed ({type(error).__name__})")
+            needs_backup = True
+        if not needs_backup:
+            # A backup of an empty logbook protects nothing and would push
+            # real backups out of the rolling set. Not a failure: no notice,
+            # and a schema upgrade goes ahead.
+            api._log("Launch backup skipped: no records yet")
             notices = ()
+        else:
+            blocked, notices = _take_launch_backup(api, conn, db_path, schema_version)
+            if blocked is not None:
+                _close(conn)
+                return _result(api, "upgrade_blocked", None, blocked)
         conn.execute("PRAGMA foreign_keys = ON")
         db.ensure_schema(conn, schema_version)
         restore_service.sweep_stale_staging(api._log)
@@ -141,3 +141,24 @@ def prepare_database(api, db_path: str, schema_version: int) -> PreparedDatabase
     except Exception as error:
         _close(conn)
         return _result(api, "unavailable", None, f"database could not be prepared ({type(error).__name__})")
+
+
+def _take_launch_backup(api, conn: sqlite3.Connection, db_path: str,
+                       schema_version: int) -> tuple[str | None, tuple[str, ...]]:
+    """Take the launch backup. Returns the failure detail when a failed
+    backup must block the schema upgrade (else None), and the notices."""
+    backup = launch_backup.create_launch_backup(conn, db_path, schema_version)
+    if not backup.ok:
+        api._log(f"Launch backup failed: {backup.detail}")
+        if db.schema_would_change(conn, schema_version):
+            return backup.detail, ()
+        notice = (
+            f"Today's backup of your logbook couldn't be saved to {backup.folder}. "
+            "Your logbook opened normally."
+        )
+        return None, (notice,)
+    if backup.prune_failed:
+        api._log(f"Launch backup prune failed: {backup.detail}")
+        return None, (f"Older backups in {backup.folder} couldn't be cleaned up.",)
+    api._log("Launch backup saved")
+    return None, ()

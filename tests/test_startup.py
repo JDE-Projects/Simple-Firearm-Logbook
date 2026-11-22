@@ -254,3 +254,97 @@ def test_folder_lock_refuses_a_second_handle(tmp_path):
             handle.seek(0)
             msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
             handle.close()
+
+
+def _backups(tmp_path):
+    folder = tmp_path / config.BACKUPS_DIRNAME
+    return sorted(p.name for p in folder.glob("*.db")) if folder.exists() else []
+
+
+def _add_firearm(path):
+    conn = open_db(str(path))
+    conn.execute(
+        "INSERT INTO firearms (log_number, make, model, created_at, updated_at) "
+        "VALUES ('0001', 'Make', 'Model', 'now', 'now')"
+    )
+    conn.execute("UPDATE counters SET next_log_number=2 WHERE id=1")
+    conn.commit()
+    conn.close()
+
+
+def test_empty_logbook_skips_launch_backup(tmp_path):
+    path = tmp_path / config.DB_FILENAME
+    open_db(str(path)).close()
+
+    api, result = _prepare(path)
+
+    assert result.outcome == "ready"
+    assert result.notices == ()
+    assert _backups(tmp_path) == []
+    assert "Launch backup skipped: no records yet" in api.messages
+    result.conn.close()
+
+
+def test_one_firearm_takes_launch_backup(tmp_path):
+    path = tmp_path / config.DB_FILENAME
+    _add_firearm(path)
+
+    api, result = _prepare(path)
+
+    assert result.outcome == "ready"
+    assert len(_backups(tmp_path)) == 1
+    assert "Launch backup saved" in api.messages
+    result.conn.close()
+
+
+def test_emptied_logbook_that_issued_numbers_takes_launch_backup(tmp_path):
+    path = tmp_path / config.DB_FILENAME
+    _add_firearm(path)
+    conn = sqlite3.connect(path)
+    conn.execute("DELETE FROM firearms")
+    conn.commit()
+    conn.close()
+
+    _, result = _prepare(path)
+
+    assert result.outcome == "ready"
+    assert len(_backups(tmp_path)) == 1
+    result.conn.close()
+
+
+def test_old_version_empty_logbook_upgrades_without_backup(tmp_path, monkeypatch):
+    path = tmp_path / config.DB_FILENAME
+    open_db(str(path)).close()
+    conn = sqlite3.connect(path)
+    conn.execute("PRAGMA user_version = 0")
+    conn.commit()
+    conn.close()
+
+    def no_backup(*_args):
+        raise AssertionError("an empty logbook must not be backed up")
+
+    monkeypatch.setattr(startup.launch_backup, "create_launch_backup", no_backup)
+
+    _, result = _prepare(path)
+
+    assert result.outcome == "ready"
+    assert result.notices == ()
+    assert result.conn.execute("PRAGMA user_version").fetchone()[0] == config.SCHEMA_VERSION
+    result.conn.close()
+
+
+def test_failed_record_check_takes_launch_backup(tmp_path, monkeypatch):
+    path = tmp_path / config.DB_FILENAME
+    open_db(str(path)).close()
+
+    def broken_check(_conn):
+        raise sqlite3.OperationalError("no such table")
+
+    monkeypatch.setattr(startup.db, "has_user_records", broken_check)
+
+    api, result = _prepare(path)
+
+    assert result.outcome == "ready"
+    assert len(_backups(tmp_path)) == 1
+    assert "Launch backup record check failed (OperationalError)" in api.messages
+    result.conn.close()

@@ -15,7 +15,14 @@ class FakeApi:
 
 
 def _prepared(path):
+    """A logbook holding one firearm, so launch takes a backup of it."""
     conn = db.open_db(str(path))
+    conn.execute(
+        "INSERT OR IGNORE INTO firearms (log_number, make, model, created_at, updated_at) "
+        "VALUES ('0001', 'Make', 'Model', 'now', 'now')"
+    )
+    conn.execute("UPDATE counters SET next_log_number=2 WHERE id=1")
+    conn.commit()
     conn.close()
 
 
