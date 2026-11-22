@@ -90,13 +90,13 @@ def test_refuses_different_pyside6_version_without_removing_items(
     bundle = _bundle_folder(tmp_path)
     approved = bundle / "assistant.exe"
     _write_file(approved)
-    monkeypatch.setattr(trimmer.metadata, "version", lambda _: "6.12.0")
+    monkeypatch.setattr(trimmer.metadata, "version", lambda _: "0.0.0")
 
     assert trimmer.trim_bundle(bundle.parents[1]) == 1
 
     assert approved.exists()
     output = capsys.readouterr().out
-    assert "6.12.0" in output
+    assert "0.0.0" in output
     assert trimmer.CHECKED_PYSIDE6_VERSION in output
 
 
