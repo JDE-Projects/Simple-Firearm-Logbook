@@ -59,8 +59,6 @@ REM --noconfirm replaces the previous dist folder without asking.
   --icon "simple_firearm_logbook.ico" ^
   --add-data "sfl\resources;resources" ^
   --add-data "licenses;licenses" ^
-  --collect-all PySide6 ^
-  --collect-all qtpy ^
   --hidden-import truststore ^
   simple_firearm_logbook.py
 if errorlevel 1 (
