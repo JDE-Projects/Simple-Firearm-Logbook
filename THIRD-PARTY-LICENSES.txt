@@ -15,8 +15,8 @@ FreeType         Portions of this software are copyright (c) 2006 The FreeType
 
 Table of contents
 -----------------
-Qt 6.11.2, PySide6 6.11.2, and shiboken6 6.11.2: LGPL-3.0
-FFmpeg 7.1.5 and zlib 1.3.1: LGPL-2.1-or-later and zlib license
+Qt 6.12.0, Qt WebEngine 6.140.0, PySide6 6.12.0, and shiboken6 6.12.0: LGPL-3.0
+FFmpeg 9.0.1 and zlib 1.3.1: LGPL-2.1-or-later and zlib license
 CPython 3.14.7 and bundled native libraries: PSF-2.0 and stated licenses
 PyInstaller 6.22.3 bootloader: GPL-2.0-or-later with bootloader exception;
   run-time hooks and modules: Apache-2.0
@@ -31,36 +31,38 @@ notices for the Qt modules, plugins, QML, and software renderer shipped here.
 _internal\licenses\THIRD-PARTY-LICENSES-CHROMIUM.txt holds all Chromium notices
 for Qt WebEngine.
 ============================================================
-Qt 6.11.2 / PySide6 6.11.2 / shiboken6 6.11.2 - GNU LGPL v3.0
+Qt 6.12.0 / Qt WebEngine 6.140.0 / PySide6 6.12.0 / shiboken6 6.12.0 - GNU LGPL v3.0
 ============================================================
-Qt 6.11.2 and PySide6/shiboken6 6.11.2 are licensed under the GNU LGPL v3.0.
+Qt 6.12.0, Qt WebEngine 6.140.0, and PySide6/shiboken6 6.12.0 are licensed under
+the GNU LGPL v3.0.
 The full GNU LGPL v3 text is in LICENSE.LGPL-3.0.txt beside this file, and the
 GNU GPL v3 text it builds on is in LICENSE.GPL-3.0.txt beside this file.
 
 The Qt libraries are the loose files in _internal\PySide6 and may be replaced
-with your own build of the same version. You may modify the libraries and
+with your own build of the same versions. You may modify the libraries and
 reverse engineer this app to debug such modifications.
 
 Corresponding source is available from:
-https://download.qt.io/archive/qt/6.11/6.11.2/single/qt-everywhere-src-6.11.2.zip
-https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.11.2-src/pyside-setup-everywhere-src-6.11.2.tar.xz
+https://download.qt.io/archive/qt/6.12/6.12.0/single/qt-everywhere-src-6.12.0.zip
+https://download.qt.io/official_releases/qtwebengine/6.140/6.140.0/src/qtwebengine-everywhere-src-6.140.0.tar.xz
+https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.12.0-src/pyside-setup-everywhere-src-6.12.0.tar.xz
 A copy is also available on written request through this repository's GitHub
 Issues page: https://github.com/JDE-Projects/Simple-Firearm-Logbook/issues
 ============================================================
-FFmpeg 7.1.5 - LGPL-2.1-or-later
+FFmpeg 9.0.1 - LGPL-2.1-or-later
 ============================================================
-The shipped FFmpeg DLLs are avcodec-61.dll, avformat-61.dll, avutil-59.dll,
-swresample-5.dll, and swscale-8.dll. FFmpeg 7.1.5 is licensed under LGPL-2.1-or-later.
+The shipped FFmpeg DLLs are avcodec-63.dll, avformat-63.dll, avutil-61.dll,
+swresample-7.dll, and swscale-10.dll. FFmpeg 9.0.1 is licensed under LGPL-2.1-or-later.
 
 Build configuration:
---prefix=/c/FFmpeg-n7.1.5/build/msvc/installed --disable-programs --disable-doc --disable-debug --enable-network --disable-lzma --enable-pic --disable-vulkan --disable-v4l2-m2m --disable-decoder=truemotion1 --disable-avdevice --disable-avfilter --enable-zlib --extra-cflags='-IC:/zlib-1.3.1/build/amd64' --extra-ldflags='-LIBPATH:C:/zlib-1.3.1/build/amd64' --toolchain=msvc --enable-shared --disable-static
+--prefix=/c/FFmpeg-n9.0.1/build/msvc/installed --disable-programs --disable-doc --disable-debug --enable-network --disable-lzma --enable-pic --disable-vulkan --disable-v4l2-m2m --disable-decoder=truemotion1 --disable-avdevice --disable-avfilter --enable-zlib --extra-cflags='-IC:/zlib-1.3.1/build/amd64' --extra-ldflags='-LIBPATH:C:/zlib-1.3.1/build/amd64' --toolchain=msvc --enable-shared --disable-static
 
-Corresponding source: https://ffmpeg.org/releases/ffmpeg-7.1.5.tar.xz
+Corresponding source: https://ffmpeg.org/releases/ffmpeg-9.0.1.tar.xz
 A copy is also available on written request through this repository's GitHub
 Issues page: https://github.com/JDE-Projects/Simple-Firearm-Logbook/issues
 You may modify the libraries and reverse engineer this app to debug such modifications.
 ============================================================
-FFmpeg 7.1.5 - LICENSE.md
+FFmpeg 9.0.1 - LICENSE.md
 ============================================================
 # License
 
@@ -76,7 +78,6 @@ configure to activate them. In this case, FFmpeg's license changes to GPL v2+.
 
 Specifically, the GPL parts of FFmpeg are:
 
-- libpostproc
 - optional x86 optimization in the files
     - `libavcodec/x86/flac_dsp_gpl.asm`
     - `libavcodec/x86/idct_mmx.c`
@@ -109,7 +110,6 @@ Specifically, the GPL parts of FFmpeg are:
     - `vf_owdenoise.c`
     - `vf_perspective.c`
     - `vf_phase.c`
-    - `vf_pp.c`
     - `vf_pp7.c`
     - `vf_pullup.c`
     - `vf_repeatfields.c`
@@ -193,7 +193,7 @@ incompatible with the GPLv2 and v3. To the best of our knowledge, they are
 compatible with the LGPL.
 
 ============================================================
-FFmpeg 7.1.5 - COPYING.LGPLv2.1
+FFmpeg 9.0.1 - COPYING.LGPLv2.1
 ============================================================
                   GNU LESSER GENERAL PUBLIC LICENSE
                        Version 2.1, February 1999

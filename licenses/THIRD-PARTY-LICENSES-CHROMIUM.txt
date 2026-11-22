@@ -1,7 +1,7 @@
-Qt WebEngine 6.11.2 Chromium Third-Party Licenses
+Qt WebEngine 6.140.0 Chromium Third-Party Licenses
 =================================================
 
-These notices come from Qt's documentation for Qt WebEngine 6.11.2 (https://doc.qt.io/qt-6.11/qtwebengine-licensing.html).
+These notices come from Qt's documentation for Qt WebEngine 6.140.0 (https://doc.qt.io/qtwebengine/qtwebengine-licensing.html).
 
 ============================================================
 Chromium license page
@@ -39,14 +39,8 @@ MIT
 Abseil
 Apache-2.0
 
-Abseil
-Apache-2.0
-
 Acorn, a tiny, fast JavaScript parser written in JavaScript.
 MIT
-
-Alliance for Open Media Video Codec
-Alliance-for-Open-Media-Patent, BSD-2-Clause
 
 Alliance for Open Media Video Codec
 Alliance-for-Open-Media-Patent, BSD-2-Clause
@@ -57,11 +51,8 @@ BSD
 Android Explicit Synchronization
 Apache-2.0
 
-Android Explicit Synchronization
-Apache-2.0
-
-BoringSSL
-MIT, BSD-3-Clause, OpenSSL, ISC, SSLeay
+Anti-Grain Geometry
+MIT
 
 BoringSSL
 MIT, BSD-3-Clause, OpenSSL, ISC, SSLeay
@@ -69,17 +60,11 @@ MIT, BSD-3-Clause, OpenSSL, ISC, SSLeay
 Brotli
 MIT
 
-Brotli
-MIT
+C++ Big Interger Library
+Public Domain
 
 C++ Signal/Slot Library
 Ignorable
-
-C++ Signal/Slot Library
-Ignorable
-
-CRC32C
-BSD-3-Clause
 
 CRC32C
 BSD-3-Clause
@@ -93,9 +78,6 @@ BSD
 CityHash
 MIT
 
-CityHash
-MIT
-
 CodeMirror 5
 MIT
 
@@ -105,13 +87,7 @@ MIT
 Compact Encoding Detection
 Apache-2.0
 
-Compact Encoding Detection
-Apache-2.0
-
 Compact Language Detector v3
-Apache-2.0
-
-Crashpad
 Apache-2.0
 
 Crashpad
@@ -129,32 +105,17 @@ Apache-2.0
 Expat XML Parser
 MIT
 
-Expat XML Parser
-MIT
-
 FP16
 MIT
 
 Fiat-Crypto: Synthesizing Correct-by-Construction Code for Cryptographic Primitives
 Apache-2.0
 
-Fiat-Crypto: Synthesizing Correct-by-Construction Code for Cryptographic Primitives
-Apache-2.0
-
-FlatBuffers
-Apache-2.0
-
 FlatBuffers
 Apache-2.0
 
 General Purpose FFT (Fast Fourier/Cosine/Sine Transform) Package
 LicenseRef-takuya-ooura
-
-General Purpose FFT (Fast Fourier/Cosine/Sine Transform) Package
-LicenseRef-takuya-ooura
-
-Google Double Conversion
-BSD-3-Clause
 
 Google Double Conversion
 BSD-3-Clause
@@ -167,9 +128,6 @@ Apache-2.0
 
 Implementation of WebDriver BiDi standard
 Apache-2.0
-
-In line A-law and u-law conversion routines
-Custom license
 
 In line A-law and u-law conversion routines
 Custom license
@@ -198,12 +156,6 @@ Apache-2.0
 Lit
 BSD-3-Clause
 
-Lit
-BSD-3-Clause
-
-Lit
-BSD-3-Clause
-
 Marked
 BSD-3-Clause, MIT
 
@@ -212,12 +164,6 @@ Apache-2.0
 
 Metrics Protos
 BSD-3-Clause
-
-Metrics Protos
-BSD-3-Clause
-
-NVidia Control X Extension Library
-MIT
 
 OTS (OpenType Sanitizer)
 BSD-3-Clause
@@ -231,17 +177,8 @@ BSD
 PFFFT: a pretty fast FFT.
 pffft
 
-PFFFT: a pretty fast FFT.
-pffft
-
 Paul Hsieh's SuperFastHash
 BSD-3-Clause
-
-Paul Hsieh's SuperFastHash
-BSD-3-Clause
-
-Perfetto
-blessing, BSD-3-Clause, Apache-2.0
 
 Perfetto
 blessing, BSD-3-Clause, Apache-2.0
@@ -249,22 +186,10 @@ blessing, BSD-3-Clause, Apache-2.0
 Polymer
 BSD-3-Clause
 
-Polymer
-BSD-3-Clause
-
-Private Join and Compute subset
-Apache-2.0
-
 Private Join and Compute subset
 Apache-2.0
 
 Protocol Buffers
-BSD-3-Clause
-
-Protocol Buffers
-BSD-3-Clause
-
-Protocol Buffers (javascript)
 BSD-3-Clause
 
 Protocol Buffers (javascript)
@@ -274,12 +199,6 @@ Puppeteer Core
 Apache-2.0
 
 QUICHE
-BSD-3-Clause
-
-QUICHE
-BSD-3-Clause
-
-Recurrent neural network for audio noise reduction
 BSD-3-Clause
 
 Recurrent neural network for audio noise reduction
@@ -303,14 +222,8 @@ MIT
 Snappy: A fast compressor/decompressor
 BSD-3-Clause, CC-BY-4.0, MIT, CC-BY-3.0
 
-Snappy: A fast compressor/decompressor
-BSD-3-Clause, CC-BY-4.0, MIT, CC-BY-3.0
-
 Speech Dispatcher
 LGPL-2.1
-
-The Chromium Project
-BSD 3-clause "New" or "Revised" License
 
 The Chromium Project
 BSD 3-clause "New" or "Revised" License
@@ -321,17 +234,8 @@ Apache-2.0
 The ITU G.722 codec, encode and decode part.
 Custom license
 
-The ITU G.722 codec, encode and decode part.
-Custom license
-
 URI Template Parser
 Apache-2.0
-
-URI Template Parser
-Apache-2.0
-
-URL Pattern Library
-MIT
 
 URL Pattern Library
 MIT
@@ -341,9 +245,6 @@ SunPro
 
 Volk Meta loader for Vulkan API
 MIT
-
-Vulkan API headers
-Apache-2.0
 
 Vulkan API headers
 Apache-2.0
@@ -363,20 +264,11 @@ Apache-2.0
 WebKit
 BSD and LGPL v2 and LGPL v2.1
 
-WebKit
-BSD and LGPL v2 and LGPL v2.1
-
 WebM container parser and writer.
-BSD-3-Clause, Patent
+BSD-3-Clause
 
 WebP image encoder/decoder
-BSD-3-Clause, Patent
-
-WebP image encoder/decoder
-BSD-3-Clause, Patent
-
-WebRTC
-BSD
+BSD-3-Clause
 
 WebRTC
 BSD
@@ -387,12 +279,6 @@ MIT
 Wuffs (Wrangling Untrusted File Formats Safely)
 Apache-2.0
 
-Wuffs (Wrangling Untrusted File Formats Safely)
-Apache-2.0
-
-Zstandard
-BSD-3-Clause
-
 Zstandard
 BSD-3-Clause
 
@@ -401,12 +287,6 @@ BSD-2-Clause
 
 d3
 ISC
-
-d3
-ISC
-
-dav1d is an AV1 decoder :)
-BSD-2-Clause
 
 dav1d is an AV1 decoder :)
 BSD-2-Clause
@@ -418,10 +298,7 @@ fast_float
 MIT
 
 ffmpeg
-LGPL 2.1
-
-fft
-Custom license
+bsd-2-clause, bsd-3-clause, isc, lgpl-2.1, mit
 
 fft
 Custom license
@@ -432,17 +309,8 @@ BSD
 fontconfig
 public-domain-md5, MIT-Modern-Variant, HPND-sell-variant, MIT
 
-fontconfig
-public-domain-md5, MIT-Modern-Variant, HPND-sell-variant, MIT
-
 google-glog's symbolization library
 BSD-3-Clause
-
-google-glog's symbolization library
-BSD-3-Clause
-
-harfbuzz
-MIT-Modern-Variant
 
 harfbuzz
 MIT-Modern-Variant
@@ -453,12 +321,6 @@ MPL-1.1
 icu
 MIT
 
-icu
-MIT
-
-inspector protocol
-BSD-3-Clause
-
 inspector protocol
 BSD-3-Clause
 
@@ -468,14 +330,8 @@ BSD-3-Clause
 ipcz
 BSD
 
-ipcz
-BSD
-
 json5
 MIT
-
-jsoncpp
-JsonCPP
 
 jsoncpp
 JsonCPP
@@ -492,32 +348,17 @@ BSD-2-Clause, MIT
 libgav1
 Apache-2.0
 
-libpng
-Libpng-2.0, Libpng
-
-libpng
-Libpng-2.0, Libpng
-
-libsrtp
-3-clause BSD
-
 libsrtp
 3-clause BSD
 
 libvpx
-BSD-3-Clause, WebM-Project-Patent
-
-libvpx
-BSD-3-Clause, WebM-Project-Patent
+BSD-3-Clause
 
 libxml
 MIT
 
 libxslt
 X11
-
-libyuv
-BSD-3-Clause
 
 libyuv
 BSD-3-Clause
@@ -531,12 +372,6 @@ MIT
 modp base64 decoder
 BSD-3-Clause
 
-modp base64 decoder
-BSD-3-Clause
-
-opus
-Opus-Patent-BSD-3-Clause
-
 opus
 Opus-Patent-BSD-3-Clause
 
@@ -546,12 +381,6 @@ BSD-2-Clause
 re2 - an efficient, principled regular expression library
 BSD-3-Clause
 
-re2 - an efficient, principled regular expression library
-BSD-3-Clause
-
-simdutf unicode transcoder
-MIT
-
 simdutf unicode transcoder
 MIT
 
@@ -560,12 +389,6 @@ BSD-3-Clause
 
 spl sqrt floor
 SPL-SQRT-FLOOR
-
-spl sqrt floor
-SPL-SQRT-FLOOR
-
-sqlite
-blessing
 
 sqlite
 blessing
@@ -578,12 +401,6 @@ MIT
 
 xdg-user-dirs
 MIT
-
-xdg-user-dirs
-MIT
-
-zlib
-Zlib
 
 zlib
 Zlib
@@ -1520,6 +1337,27 @@ limitations under the License.
 © 2026 The Qt Company Ltd. Documentation contributions included herein are the copyrights of their respective owners. The documentation provided herein is licensed under the terms of the GNU Free Documentation License version 1.3 as published by the Free Software Foundation. Qt and respective logos are  trademarks of The Qt Company Ltd. in Finland and/or other countries worldwide. All other trademarks are property of their respective owners.
 
 ============================================================
+Chromium attribution: Anti-Grain Geometry
+============================================================
+Anti-Grain Geometry
+
+Project Homepage
+
+The Anti-Grain Geometry Project
+A high quality rendering engine for C++
+http://antigrain.com
+
+Anti-Grain Geometry - Version 2.3
+Copyright (C) 2002-2005 Maxim Shemanarev (McSeem)
+
+Permission to copy, use, modify, sell and distribute this software
+is granted provided this copyright notice appears in all copies.
+This software is provided "as is" without express or implied
+warranty, and with no claim as to its suitability for any purpose.
+
+© 2026 The Qt Company Ltd. Documentation contributions included herein are the copyrights of their respective owners. The documentation provided herein is licensed under the terms of the GNU Free Documentation License version 1.3 as published by the Free Software Foundation. Qt and respective logos are  trademarks of The Qt Company Ltd. in Finland and/or other countries worldwide. All other trademarks are property of their respective owners.
+
+============================================================
 Chromium attribution: BoringSSL
 ============================================================
 BoringSSL
@@ -1792,6 +1630,86 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+
+© 2026 The Qt Company Ltd. Documentation contributions included herein are the copyrights of their respective owners. The documentation provided herein is licensed under the terms of the GNU Free Documentation License version 1.3 as published by the Free Software Foundation. Qt and respective logos are  trademarks of The Qt Company Ltd. in Finland and/or other countries worldwide. All other trademarks are property of their respective owners.
+
+============================================================
+Chromium attribution: C++ Big Interger Library
+============================================================
+C++ Big Interger Library
+
+Project Homepage
+
+                            C++ Big Integer Library
+                          (see ChangeLog for version)
+
+                        http://mattmccutchen.net/bigint/
+
+       Written and maintained by Matt McCutchen <matt@mattmccutchen.net>
+
+You can use this library in a C++ program to do arithmetic on integers of size
+limited only by your computer's memory.  The library provides BigUnsigned and
+BigInteger classes that represent nonnegative integers and signed integers,
+respectively.  Most of the C++ arithmetic operators are overloaded for these
+classes, so big-integer calculations are as easy as:
+
+    #include "BigIntegerLibrary.hh"
+
+    BigInteger a = 65536;
+    cout << (a * a * a * a * a * a * a * a);
+
+    (prints 340282366920938463463374607431768211456)
+
+The code in `sample.cc' demonstrates the most important features of the library.
+To get started quickly, read the code and explanations in that file and run it.
+If you want more detail or a feature not shown in `sample.cc', consult the
+consult the actual header and source files, which are thoroughly commented.
+
+This library emphasizes ease of use and clarity of implementation over speed;
+some users will prefer GMP (http://swox.com/gmp/), which is faster.  The code is
+intended to be reasonably portable across computers and modern C++ compilers; in
+particular, it uses whatever word size the computer provides (32-bit, 64-bit, or
+otherwise).
+
+Compiling programs that use the library
+---------------------------------------
+The library consists of a folder full of C++ header files (`.hh') and source
+files (`.cc').  Your own programs should `#include' the necessary header files
+and link with the source files.  A makefile that builds the sample program
+(`sample.cc') is included; you can adapt it to replace the sample with your own
+program.
+
+Alternatively, you can use your own build system or IDE.  In that case, you must
+put the library header files where the compiler will find them and arrange to
+have your program linked with the library source files; otherwise, you will get
+errors about missing header files or "undefined references".  To learn how to do
+this, consult the documentation for the build system or IDE; don't bother asking
+me.  Adding all the library files to your project will work in many IDEs but may
+not be the most desirable approach.
+
+Resources
+---------
+The library's Web site (above) provides links to released versions, the current
+development version, and a mailing list for release announcements, questions,
+bug reports, and other discussion of the library.  I would be delighted to hear
+from you if you like this library and/or find a good use for it.
+
+Bugs and enhancements
+---------------------
+The library has been tested by me and others but is by no means bug-free.  If
+you find a bug, please report it, whether it comes in the form of compiling
+trouble, a mathematically inaccurate result, or a memory-management blooper
+(since I use Java, these are altogether too common in my C++).  I generally fix
+all reported bugs.  You are also welcome to request enhancements, but I am
+unlikely to do substantial amounts of work on enhancements at this point.
+
+Legal
+-----
+I, Matt McCutchen, the sole author of the original Big Integer Library, waive my
+copyright to it, placing it in the public domain.  The library comes with
+absolutely no warranty.
+
+~~~~
 
 © 2026 The Qt Company Ltd. Documentation contributions included herein are the copyrights of their respective owners. The documentation provided herein is licensed under the terms of the GNU Free Documentation License version 1.3 as published by the Free Software Foundation. Qt and respective logos are  trademarks of The Qt Company Ltd. in Finland and/or other countries worldwide. All other trademarks are property of their respective owners.
 
@@ -5153,38 +5071,6 @@ Project Homepage
 // THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-© 2026 The Qt Company Ltd. Documentation contributions included herein are the copyrights of their respective owners. The documentation provided herein is licensed under the terms of the GNU Free Documentation License version 1.3 as published by the Free Software Foundation. Qt and respective logos are  trademarks of The Qt Company Ltd. in Finland and/or other countries worldwide. All other trademarks are property of their respective owners.
-
-============================================================
-Chromium attribution: NVidia Control X Extension Library
-============================================================
-NVidia Control X Extension Library
-
-Project Homepage
-
-/*
- * Copyright (c) 2008 NVIDIA, Corporation
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice (including the next
- * paragraph) shall be included in all copies or substantial portions of the
- * Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- * /
 
 © 2026 The Qt Company Ltd. Documentation contributions included herein are the copyrights of their respective owners. The documentation provided herein is licensed under the terms of the GNU Free Documentation License version 1.3 as published by the Free Software Foundation. Qt and respective logos are  trademarks of The Qt Company Ltd. in Finland and/or other countries worldwide. All other trademarks are property of their respective owners.
 
@@ -9318,7 +9204,7 @@ library.  If the library is modified by someone else and passed on, we
 want its recipients to know that what they have is not the original
 version, so that any problems introduced by others will not reflect on
 the original authors' reputations.
-
+
   Finally, any free program is threatened constantly by software
 patents.  We wish to avoid the danger that companies distributing free
 software will individually obtain patent licenses, thus in effect
@@ -9365,7 +9251,7 @@ works together with the library.
 
   Note that it is possible for a library to be covered by the ordinary
 General Public License rather than by this special one.
-
+
                   GNU LIBRARY GENERAL PUBLIC LICENSE
    TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
 
@@ -9412,7 +9298,7 @@ Library.
   You may charge a fee for the physical act of transferring a copy,
 and you may at your option offer warranty protection in exchange for a
 fee.
-
+
   2. You may modify your copy or copies of the Library or any portion
 of it, thus forming a work based on the Library, and copy and
 distribute such modifications or work under the terms of Section 1
@@ -9470,7 +9356,7 @@ instead of to this License.  (If a newer version than version 2 of the
 ordinary GNU General Public License has appeared, then you can specify
 that version instead if you wish.)  Do not make any other change in
 these notices.
-
+
   Once this change is made in a given copy, it is irreversible for
 that copy, so the ordinary GNU General Public License applies to all
 subsequent copies and derivative works made from that copy.
@@ -9521,7 +9407,7 @@ Library will still fall under Section 6.)
 distribute the object code for the work under the terms of Section 6.
 Any executables containing that work also fall under Section 6,
 whether or not they are linked directly with the Library itself.
-
+
   6. As an exception to the Sections above, you may also compile or
 link a "work that uses the Library" with the Library to produce a
 work containing portions of the Library, and distribute that work
@@ -9575,7 +9461,7 @@ restrictions of other proprietary libraries that do not normally
 accompany the operating system.  Such a contradiction means you cannot
 use both them and the Library together in an executable that you
 distribute.
-
+
   7. You may place library facilities that are a work based on the
 Library side-by-side in a single library together with other library
 facilities not covered by this License, and distribute such a combined
@@ -9616,7 +9502,7 @@ subject to these terms and conditions.  You may not impose any further
 restrictions on the recipients' exercise of the rights granted herein.
 You are not responsible for enforcing compliance by third parties to
 this License.
-
+
   11. If, as a consequence of a court judgment or allegation of patent
 infringement or for any other reason (not limited to patent issues),
 conditions are imposed on you (whether by court order, agreement or
@@ -9668,7 +9554,7 @@ conditions either of that version or of any later version published by
 the Free Software Foundation.  If the Library does not specify a
 license version number, you may choose any version ever published by
 the Free Software Foundation.
-
+
   14. If you wish to incorporate parts of the Library into other free
 programs whose distribution conditions are incompatible with these,
 write to the author to ask for permission.  For software which is
@@ -9760,7 +9646,7 @@ modified by someone else and passed on, the recipients should know
 that what they have is not the original version, so that the original
 author's reputation will not be affected by problems that might be
 introduced by others.
-
+
   Finally, software patents pose a constant threat to the existence of
 any free program.  We wish to make sure that a company cannot
 effectively restrict the users of a free program by obtaining a
@@ -9816,7 +9702,7 @@ modification follow.  Pay close attention to the difference between a
 "work based on the library" and a "work that uses the library".  The
 former contains code derived from the library, whereas the latter must
 be combined with the library in order to run.
-
+
                   GNU LESSER GENERAL PUBLIC LICENSE
    TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
 
@@ -9863,7 +9749,7 @@ Library.
   You may charge a fee for the physical act of transferring a copy,
 and you may at your option offer warranty protection in exchange for a
 fee.
-
+
   2. You may modify your copy or copies of the Library or any portion
 of it, thus forming a work based on the Library, and copy and
 distribute such modifications or work under the terms of Section 1
@@ -9921,7 +9807,7 @@ instead of to this License.  (If a newer version than version 2 of the
 ordinary GNU General Public License has appeared, then you can specify
 that version instead if you wish.)  Do not make any other change in
 these notices.
-
+
   Once this change is made in a given copy, it is irreversible for
 that copy, so the ordinary GNU General Public License applies to all
 subsequent copies and derivative works made from that copy.
@@ -9972,7 +9858,7 @@ Library will still fall under Section 6.)
 distribute the object code for the work under the terms of Section 6.
 Any executables containing that work also fall under Section 6,
 whether or not they are linked directly with the Library itself.
-
+
   6. As an exception to the Sections above, you may also combine or
 link a "work that uses the Library" with the Library to produce a
 work containing portions of the Library, and distribute that work
@@ -10034,7 +9920,7 @@ restrictions of other proprietary libraries that do not normally
 accompany the operating system.  Such a contradiction means you cannot
 use both them and the Library together in an executable that you
 distribute.
-
+
   7. You may place library facilities that are a work based on the
 Library side-by-side in a single library together with other library
 facilities not covered by this License, and distribute such a combined
@@ -10075,7 +9961,7 @@ subject to these terms and conditions.  You may not impose any further
 restrictions on the recipients' exercise of the rights granted herein.
 You are not responsible for enforcing compliance by third parties with
 this License.
-
+
   11. If, as a consequence of a court judgment or allegation of patent
 infringement or for any other reason (not limited to patent issues),
 conditions are imposed on you (whether by court order, agreement or
@@ -10127,7 +10013,7 @@ conditions either of that version or of any later version published by
 the Free Software Foundation.  If the Library does not specify a
 license version number, you may choose any version ever published by
 the Free Software Foundation.
-
+
   14. If you wish to incorporate parts of the Library into other free
 programs whose distribution conditions are incompatible with these,
 write to the author to ask for permission.  For software which is
@@ -10201,32 +10087,6 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
-
-Additional IP Rights Grant (Patents)
-------------------------------------
-
-"These implementations" means the copyrightable works that implement the WebM
-codecs distributed by Google as part of the WebM Project.
-
-Google hereby grants to you a perpetual, worldwide, non-exclusive, no-charge,
-royalty-free, irrevocable (except as stated in this section) patent license to
-make, have made, use, offer to sell, sell, import, transfer, and otherwise
-run, modify and propagate the contents of these implementations of WebM, where
-such license applies only to those patent claims, both currently owned by
-Google and acquired in the future, licensable by Google that are necessarily
-infringed by these implementations of WebM. This grant does not include claims
-that would be infringed only as a consequence of further modification of these
-implementations. If you or your agent or exclusive licensee institute or order
-or agree to the institution of patent litigation or any other patent
-enforcement activity against any entity (including a cross-claim or
-counterclaim in a lawsuit) alleging that any of these implementations of WebM
-or any code incorporated within any of these implementations of WebM
-constitute direct or contributory patent infringement, or inducement of
-patent infringement, then any patent rights granted to you under this License
-for these implementations of WebM shall terminate as of the date such
-litigation is filed.
-
 © 2026 The Qt Company Ltd. Documentation contributions included herein are the copyrights of their respective owners. The documentation provided herein is licensed under the terms of the GNU Free Documentation License version 1.3 as published by the Free Software Foundation. Qt and respective logos are  trademarks of The Qt Company Ltd. in Finland and/or other countries worldwide. All other trademarks are property of their respective owners.
 
 ============================================================
@@ -10265,32 +10125,6 @@ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-
-Additional IP Rights Grant (Patents)
-------------------------------------
-
-"These implementations" means the copyrightable works that implement the WebM
-codecs distributed by Google as part of the WebM Project.
-
-Google hereby grants to you a perpetual, worldwide, non-exclusive, no-charge,
-royalty-free, irrevocable (except as stated in this section) patent license to
-make, have made, use, offer to sell, sell, import, transfer, and otherwise
-run, modify and propagate the contents of these implementations of WebM, where
-such license applies only to those patent claims, both currently owned by
-Google and acquired in the future, licensable by Google that are necessarily
-infringed by these implementations of WebM. This grant does not include claims
-that would be infringed only as a consequence of further modification of these
-implementations. If you or your agent or exclusive licensee institute or order
-or agree to the institution of patent litigation or any other patent
-enforcement activity against any entity (including a cross-claim or
-counterclaim in a lawsuit) alleging that any of these implementations of WebM
-or any code incorporated within any of these implementations of WebM
-constitute direct or contributory patent infringement, or inducement of
-patent infringement, then any patent rights granted to you under this License
-for these implementations of WebM shall terminate as of the date such
-litigation is filed.
 
 © 2026 The Qt Company Ltd. Documentation contributions included herein are the copyrights of their respective owners. The documentation provided herein is licensed under the terms of the GNU Free Documentation License version 1.3 as published by the Free Software Foundation. Qt and respective logos are  trademarks of The Qt Company Ltd. in Finland and/or other countries worldwide. All other trademarks are property of their respective owners.
 
@@ -10893,7 +10727,7 @@ The following libraries are under LGPL version 3:
 When combining them with FFmpeg, use the configure option `--enable-version3` to
 upgrade FFmpeg to the LGPL v3.
 
-The VMAF, mbedTLS, RK MPI, OpenCORE and VisualOn libraries are under the Apache License
+The mbedTLS, RK MPI, OpenCORE, VisualOn and libastcenc libraries are under the Apache License
 2.0. That license is incompatible with the LGPL v2.1 and the GPL v2, but not with
 version 3 of those licenses. So to combine these libraries with FFmpeg, the
 license version needs to be upgraded by passing `--enable-version3` to configure.
@@ -10914,6 +10748,37 @@ The Fraunhofer FDK AAC and OpenSSL libraries are under licenses which are
 incompatible with the GPLv2 and v3. To the best of our knowledge, they are
 compatible with the LGPL.
 
+
+********************************************************************************
+
+libavcodec/riscv/h264_intrapred_rvv.S
+
+SPDX-License-Identifier: BSD-2-Clause
+
+Copyright © 2025 Tristan Matthews
+Partly based on h264_pred.c Copyright (c) 2023 SiFive, Inc.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice,
+this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+this list of conditions and the following disclaimer in the documentation
+and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
 ********************************************************************************
 
@@ -10950,6 +10815,36 @@ libavcodec/riscv/h264dsp_rvv.S
 SPDX-License-Identifier: BSD-2-Clause
 
 Copyright © 2024 Rémi Denis-Courmont.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice,
+this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+this list of conditions and the following disclaimer in the documentation
+and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+
+********************************************************************************
+
+libavcodec/riscv/h264idct_dequant_rvv.S
+
+SPDX-License-Identifier: BSD-2-Clause
+
+Copyright © 2025 Rémi Denis-Courmont.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -14344,150 +14239,6 @@ limitations under the License.
 © 2026 The Qt Company Ltd. Documentation contributions included herein are the copyrights of their respective owners. The documentation provided herein is licensed under the terms of the GNU Free Documentation License version 1.3 as published by the Free Software Foundation. Qt and respective logos are  trademarks of The Qt Company Ltd. in Finland and/or other countries worldwide. All other trademarks are property of their respective owners.
 
 ============================================================
-Chromium attribution: libpng
-============================================================
-libpng
-
-Project Homepage
-
-COPYRIGHT NOTICE, DISCLAIMER, and LICENSE
-=========================================
-
-PNG Reference Library License version 2
----------------------------------------
-
- * Copyright (c) 1995-2026 The PNG Reference Library Authors.
- * Copyright (c) 2018-2026 Cosmin Truta.
- * Copyright (c) 2000-2002, 2004, 2006-2018 Glenn Randers-Pehrson.
- * Copyright (c) 1996-1997 Andreas Dilger.
- * Copyright (c) 1995-1996 Guy Eric Schalnat, Group 42, Inc.
-
-The software is supplied "as is", without warranty of any kind,
-express or implied, including, without limitation, the warranties
-of merchantability, fitness for a particular purpose, title, and
-non-infringement.  In no event shall the Copyright owners, or
-anyone distributing the software, be liable for any damages or
-other liability, whether in contract, tort or otherwise, arising
-from, out of, or in connection with the software, or the use or
-other dealings in the software, even if advised of the possibility
-of such damage.
-
-Permission is hereby granted to use, copy, modify, and distribute
-this software, or portions hereof, for any purpose, without fee,
-subject to the following restrictions:
-
- 1. The origin of this software must not be misrepresented; you
-    must not claim that you wrote the original software.  If you
-    use this software in a product, an acknowledgment in the product
-    documentation would be appreciated, but is not required.
-
- 2. Altered source versions must be plainly marked as such, and must
-    not be misrepresented as being the original software.
-
- 3. This Copyright notice may not be removed or altered from any
-    source or altered source distribution.
-
-
-PNG Reference Library License version 1 (for libpng 0.5 through 1.6.35)
------------------------------------------------------------------------
-
-libpng versions 1.0.7, July 1, 2000, through 1.6.35, July 15, 2018 are
-Copyright (c) 2000-2002, 2004, 2006-2018 Glenn Randers-Pehrson, are
-derived from libpng-1.0.6, and are distributed according to the same
-disclaimer and license as libpng-1.0.6 with the following individuals
-added to the list of Contributing Authors:
-
-    Simon-Pierre Cadieux
-    Eric S. Raymond
-    Mans Rullgard
-    Cosmin Truta
-    Gilles Vollant
-    James Yu
-    Mandar Sahastrabuddhe
-    Google Inc.
-    Vadim Barkov
-
-and with the following additions to the disclaimer:
-
-    There is no warranty against interference with your enjoyment of
-    the library or against infringement.  There is no warranty that our
-    efforts or the library will fulfill any of your particular purposes
-    or needs.  This library is provided with all faults, and the entire
-    risk of satisfactory quality, performance, accuracy, and effort is
-    with the user.
-
-Some files in the "contrib" directory and some configure-generated
-files that are distributed with libpng have other copyright owners, and
-are released under other open source licenses.
-
-libpng versions 0.97, January 1998, through 1.0.6, March 20, 2000, are
-Copyright (c) 1998-2000 Glenn Randers-Pehrson, are derived from
-libpng-0.96, and are distributed according to the same disclaimer and
-license as libpng-0.96, with the following individuals added to the
-list of Contributing Authors:
-
-    Tom Lane
-    Glenn Randers-Pehrson
-    Willem van Schaik
-
-libpng versions 0.89, June 1996, through 0.96, May 1997, are
-Copyright (c) 1996-1997 Andreas Dilger, are derived from libpng-0.88,
-and are distributed according to the same disclaimer and license as
-libpng-0.88, with the following individuals added to the list of
-Contributing Authors:
-
-    John Bowler
-    Kevin Bracey
-    Sam Bushell
-    Magnus Holmgren
-    Greg Roelofs
-    Tom Tanner
-
-Some files in the "scripts" directory have other copyright owners,
-but are released under this license.
-
-libpng versions 0.5, May 1995, through 0.88, January 1996, are
-Copyright (c) 1995-1996 Guy Eric Schalnat, Group 42, Inc.
-
-For the purposes of this copyright and license, "Contributing Authors"
-is defined as the following set of individuals:
-
-    Andreas Dilger
-    Dave Martindale
-    Guy Eric Schalnat
-    Paul Schmidt
-    Tim Wegner
-
-The PNG Reference Library is supplied "AS IS".  The Contributing
-Authors and Group 42, Inc. disclaim all warranties, expressed or
-implied, including, without limitation, the warranties of
-merchantability and of fitness for any purpose.  The Contributing
-Authors and Group 42, Inc. assume no liability for direct, indirect,
-incidental, special, exemplary, or consequential damages, which may
-result from the use of the PNG Reference Library, even if advised of
-the possibility of such damage.
-
-Permission is hereby granted to use, copy, modify, and distribute this
-source code, or portions hereof, for any purpose, without fee, subject
-to the following restrictions:
-
- 1. The origin of this source code must not be misrepresented.
-
- 2. Altered versions must be plainly marked as such and must not
-    be misrepresented as being the original source.
-
- 3. This Copyright notice may not be removed or altered from any
-    source or altered source distribution.
-
-The Contributing Authors and Group 42, Inc. specifically permit,
-without fee, and encourage the use of this source code as a component
-to supporting the PNG file format in commercial products.  If you use
-this source code in a product, acknowledgment is not required but would
-be appreciated.
-
-© 2026 The Qt Company Ltd. Documentation contributions included herein are the copyrights of their respective owners. The documentation provided herein is licensed under the terms of the GNU Free Documentation License version 1.3 as published by the Free Software Foundation. Qt and respective logos are  trademarks of The Qt Company Ltd. in Finland and/or other countries worldwide. All other trademarks are property of their respective owners.
-
-============================================================
 Chromium attribution: libsrtp
 ============================================================
 libsrtp
@@ -14569,32 +14320,6 @@ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-
-Additional IP Rights Grant (Patents)
-------------------------------------
-
-"These implementations" means the copyrightable works that implement the WebM
-codecs distributed by Google as part of the WebM Project.
-
-Google hereby grants to you a perpetual, worldwide, non-exclusive, no-charge,
-royalty-free, irrevocable (except as stated in this section) patent license to
-make, have made, use, offer to sell, sell, import, transfer, and otherwise
-run, modify and propagate the contents of these implementations of WebM, where
-such license applies only to those patent claims, both currently owned by
-Google and acquired in the future, licensable by Google that are necessarily
-infringed by these implementations of WebM. This grant does not include claims
-that would be infringed only as a consequence of further modification of these
-implementations. If you or your agent or exclusive licensee institute or order
-or agree to the institution of patent litigation or any other patent
-enforcement activity against any entity (including a cross-claim or
-counterclaim in a lawsuit) alleging that any of these implementations of WebM
-or any code incorporated within any of these implementations of WebM
-constitute direct or contributory patent infringement, or inducement of
-patent infringement, then any patent rights granted to you under this License
-for these implementations of WebM shall terminate as of the date such
-litigation is filed.
 
 © 2026 The Qt Company Ltd. Documentation contributions included herein are the copyrights of their respective owners. The documentation provided herein is licensed under the terms of the GNU Free Documentation License version 1.3 as published by the Free Software Foundation. Qt and respective logos are  trademarks of The Qt Company Ltd. in Finland and/or other countries worldwide. All other trademarks are property of their respective owners.
 
