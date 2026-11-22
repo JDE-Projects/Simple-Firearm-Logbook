@@ -263,7 +263,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "app_folder",
         nargs="?",
-        default=r"dist\Simple {Thing} Tool",
+        default=r"dist\Simple Firearm Logbook",
         help="PyInstaller app folder to trim",
     )
     args = parser.parse_args(argv)
