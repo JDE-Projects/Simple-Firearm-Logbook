@@ -8,7 +8,7 @@ import sqlite3
 import threading
 
 from sfl import config, db, paths, platform_win
-from sfl.debug_log import DebugLog
+from sfl.debug_log import DebugLog, describe_error
 from sfl.services import attachments as attachments_service
 from sfl.services import backup as backup_service
 from sfl.services import export as export_service
@@ -19,6 +19,15 @@ from sfl.services import photos as photos_service
 from sfl.services import restore as restore_service
 from sfl.services import settings as settings_service
 from sfl.utils import _redact_username
+
+# The only names the page may write to the debug log. Anything else is logged
+# as "unknown", never as the value the page sent.
+_PAGE_LOG_EVENTS = (
+    "extension_handler_failed",
+    "extension_load_failed",
+    "extension_script_failed",
+    "extension_reported",
+)
 
 
 class Api:
@@ -334,7 +343,7 @@ class Api:
                     try:
                         self._window.destroy()
                     except Exception as error:
-                        self._log(f"restore_commit: couldn't close window after recovery-required result ({type(error).__name__})")
+                        self._log(f"restore_commit: couldn't close window after recovery-required result ({describe_error(error)})")
                 return result
             db_path = os.path.join(paths.app_dir(), config.DB_FILENAME)
             try:
@@ -342,7 +351,7 @@ class Api:
                 schema_version = (self._app_description.schema_version if self._app_description else config.SCHEMA_VERSION)
                 self.set_conn(opener(db_path, schema_version))
             except Exception as e:
-                self._log(f"restore_commit: couldn't reopen the database ({type(e).__name__})")
+                self._log(f"restore_commit: couldn't reopen the database ({describe_error(e)})")
                 if result.get("ok"):
                     result = {"ok": False, "error": "The restore finished but the app couldn't reopen the database. Restart the app."}
             return result
@@ -442,13 +451,11 @@ class Api:
         # or personal details the user typed in.
         self._debug_log.log(msg)
 
-    def log(self, msg):
-        # This page-facing path records only message length; internal code uses _log.
-        try:
-            length = len(str(msg))
-        except Exception:
-            length = 0
-        self._log(f"Page reported a message ({length} chars)")
+    def log_page_event(self, name):
+        if type(name) is str and name in _PAGE_LOG_EVENTS:
+            self._log(f"Page event: {name}")
+        else:
+            self._log("Page event: unknown")
 
     def prune_debug_logs(self):
         self._debug_log.prune()

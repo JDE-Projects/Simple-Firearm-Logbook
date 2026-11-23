@@ -9,6 +9,7 @@ import webview
 
 from sfl import config, paths
 from sfl import storage
+from sfl.debug_log import describe_error
 from sfl.csv_export import _build_csv_text
 from sfl.db import _firearm_row_to_dict
 from sfl.render_html import _build_full_report_html, _build_single_export_html
@@ -44,7 +45,7 @@ def export_single_html(conn, window, log, firearm_id):
         log(f"Exported single firearm HTML for {f['log_number']}")
         return {"ok": True, "path": path}
     except Exception as e:
-        log(f"export_single_html failed ({type(e).__name__})")
+        log(f"export_single_html failed ({describe_error(e)})")
         return {"ok": False, "error": "Couldn't export the HTML file."}
 
 
@@ -94,7 +95,7 @@ def _export_single_backup_zip_internal(conn, window, log, firearm_id):
         log(f"Exported backup zip for firearm {f['log_number']}")
         return {"ok": True, "path": path}
     except Exception as e:
-        log(f"export_single_backup_zip failed ({type(e).__name__})")
+        log(f"export_single_backup_zip failed ({describe_error(e)})")
         return {"ok": False, "error": "Couldn't create the backup zip."}
 
 
@@ -156,5 +157,5 @@ def export_full(conn, window, log, photo_depth="primary"):
         log(f"Full export created, photo depth={photo_depth}, {len(firearms)} firearm(s)")
         return {"ok": True, "path": path}
     except Exception as e:
-        log(f"export_full failed ({type(e).__name__})")
+        log(f"export_full failed ({describe_error(e)})")
         return {"ok": False, "error": "Couldn't create the export."}

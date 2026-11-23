@@ -4,6 +4,7 @@ import sqlite3
 from dataclasses import dataclass
 
 from sfl import config, db
+from sfl.debug_log import describe_error
 from sfl.services import launch_backup, launch_restore
 from sfl.services import restore as restore_service
 
@@ -46,7 +47,7 @@ def _close(conn: sqlite3.Connection | None) -> None:
 
 def _database_error_outcome(error: sqlite3.DatabaseError) -> tuple[str, str]:
     code = getattr(error, "sqlite_errorcode", 0) or 0
-    name = getattr(error, "sqlite_errorname", None) or type(error).__name__
+    name = describe_error(error)
     if code & 0xFF in (11, 26):
         return "damaged", f"database is corrupt or not SQLite ({name})"
     return "unavailable", f"database could not be opened ({name})"
@@ -61,7 +62,7 @@ def _initialize_database(api, db_path: str, schema_version: int, detail: str) ->
         outcome, error_detail = _database_error_outcome(error)
         return _result(api, outcome, None, error_detail)
     except Exception as error:
-        return _result(api, "unavailable", None, f"database could not be prepared ({type(error).__name__})")
+        return _result(api, "unavailable", None, f"database could not be prepared ({describe_error(error)})")
 
 
 def prepare_database(api, db_path: str, schema_version: int) -> PreparedDatabase:
@@ -76,7 +77,7 @@ def prepare_database(api, db_path: str, schema_version: int) -> PreparedDatabase
         with open(db_path, "rb") as file:
             header = file.read(8)
     except Exception as error:
-        return _result(api, "unavailable", None, f"database header could not be read ({type(error).__name__})")
+        return _result(api, "unavailable", None, f"database header could not be read ({describe_error(error)})")
     if header == config.PRO_ENCRYPTED_MAGIC:
         return _result(api, "encrypted", None, "database is protected by Pro")
     if not header:
@@ -114,7 +115,7 @@ def prepare_database(api, db_path: str, schema_version: int) -> PreparedDatabase
             needs_backup = db.has_user_records(conn)
         except Exception as error:
             # A failed check must not cost the user a backup.
-            api._log(f"Launch backup record check failed ({type(error).__name__})")
+            api._log(f"Launch backup record check failed ({describe_error(error)})")
             needs_backup = True
         if not needs_backup:
             # A backup of an empty logbook protects nothing and would push
@@ -140,7 +141,7 @@ def prepare_database(api, db_path: str, schema_version: int) -> PreparedDatabase
         return _result(api, outcome, None, detail)
     except Exception as error:
         _close(conn)
-        return _result(api, "unavailable", None, f"database could not be prepared ({type(error).__name__})")
+        return _result(api, "unavailable", None, f"database could not be prepared ({describe_error(error)})")
 
 
 def _take_launch_backup(api, conn: sqlite3.Connection, db_path: str,

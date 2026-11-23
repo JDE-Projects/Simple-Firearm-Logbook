@@ -9,6 +9,7 @@ import uuid
 from dataclasses import dataclass
 
 from sfl import config, db
+from sfl.debug_log import describe_error
 from sfl.services import launch_backup
 from sfl.services import restore as restore_service
 
@@ -76,7 +77,7 @@ def clear_record(api, db_path: str) -> None:
     except FileNotFoundError:
         _log(api, "completed restore record was already gone")
     except OSError as error:
-        _log(api, f"couldn't clear completed restore record ({type(error).__name__})")
+        _log(api, f"couldn't clear completed restore record ({describe_error(error)})")
 
 
 def _backup_timestamp(name: str) -> str:
@@ -128,7 +129,7 @@ def _read_record(api, db_path: str) -> dict | None:
         with open(_record_path(db_path), encoding="utf-8") as file:
             record = json.load(file)
     except Exception as error:
-        _log(api, f"couldn't read restore record ({type(error).__name__})")
+        _log(api, f"couldn't read restore record ({describe_error(error)})")
         return None
     if not _valid_record(record):
         _log(api, "restore record has invalid names or stage")
@@ -156,7 +157,7 @@ def _undo(api, db_path: str, record: dict) -> bool:
         _log(api, "undo cleared restore record")
         return True
     except OSError as error:
-        _log(api, f"undo failed ({type(error).__name__})")
+        _log(api, f"undo failed ({describe_error(error)})")
         return False
 
 
@@ -183,7 +184,7 @@ def _open_restored(api, db_path: str, schema_version: int, record: dict) -> Rest
     except Exception as error:
         if conn is not None:
             conn.close()
-        _log(api, f"restored live file could not be opened ({type(error).__name__})")
+        _log(api, f"restored live file could not be opened ({describe_error(error)})")
         return RestoreResult("restore_stopped")
 
 
@@ -218,7 +219,7 @@ def recover(api, db_path: str, schema_version: int) -> RestoreResult | None:
     try:
         return _recover(api, db_path, schema_version)
     except Exception as error:
-        _log(api, f"recovery stopped unexpectedly ({type(error).__name__})")
+        _log(api, f"recovery stopped unexpectedly ({describe_error(error)})")
         return RestoreResult("restore_stopped")
 
 
@@ -227,7 +228,7 @@ def _pick_backup(api, db_path: str, schema_version: int) -> tuple[str, str] | No
     try:
         names = sorted((name for name in os.listdir(folder) if launch_backup.BACKUP_FILENAME_RE.fullmatch(name)), reverse=True)
     except (FileNotFoundError, OSError) as error:
-        _log(api, f"couldn't list backups ({type(error).__name__})")
+        _log(api, f"couldn't list backups ({describe_error(error)})")
         names = []
     for name in names:
         checked = launch_backup.check_backup(_path(folder, name), schema_version)
@@ -244,7 +245,7 @@ def _remove_orphaned_staging(api, db_path: str) -> None:
     try:
         names = os.listdir(folder)
     except OSError as error:
-        _log(api, f"couldn't list orphaned staging files ({type(error).__name__})")
+        _log(api, f"couldn't list orphaned staging files ({describe_error(error)})")
         return
     for name in names:
         if not (STAGE_NAME_RE.fullmatch(name) or KEPT_TEMP_NAME_RE.fullmatch(name)):
@@ -257,7 +258,7 @@ def _remove_orphaned_staging(api, db_path: str) -> None:
             os.remove(path)
             _log(api, "removed orphaned staging file")
         except OSError as error:
-            _log(api, f"couldn't remove orphaned staging file ({type(error).__name__})")
+            _log(api, f"couldn't remove orphaned staging file ({describe_error(error)})")
 
 
 def restore_damaged(api, db_path: str, schema_version: int) -> RestoreResult:
@@ -292,7 +293,7 @@ def restore_damaged(api, db_path: str, schema_version: int) -> RestoreResult:
             os.remove(staged)
         except OSError:
             pass
-        _log(api, f"staging failed ({type(error).__name__})")
+        _log(api, f"staging failed ({describe_error(error)})")
         return RestoreResult("restore_failed")
     try:
         _write_record(db_path, record)
@@ -307,28 +308,28 @@ def restore_damaged(api, db_path: str, schema_version: int) -> RestoreResult:
         if os.path.exists(live_journal):
             raise RuntimeError("live journal remains before swap")
     except Exception as error:
-        _log(api, f"restore failed before swap ({type(error).__name__})")
+        _log(api, f"restore failed before swap ({describe_error(error)})")
         try:
             _write_record(db_path, {**record, "stage": "aborting"})
         except Exception as record_error:
-            _log(api, f"couldn't mark restore aborting ({type(record_error).__name__})")
+            _log(api, f"couldn't mark restore aborting ({describe_error(record_error)})")
             return RestoreResult("restore_stopped")
         return RestoreResult("restore_failed") if _undo(api, db_path, record) else RestoreResult("restore_stopped")
     try:
         os.replace(staged, db_path)
         _log(api, "swapped staged replacement into place")
     except Exception as error:
-        _log(api, f"swap failed ({type(error).__name__})")
+        _log(api, f"swap failed ({describe_error(error)})")
         try:
             _write_record(db_path, {**record, "stage": "aborting"})
         except Exception as record_error:
-            _log(api, f"couldn't mark restore aborting ({type(record_error).__name__})")
+            _log(api, f"couldn't mark restore aborting ({describe_error(record_error)})")
             return RestoreResult("restore_stopped")
         return RestoreResult("restore_failed") if _undo(api, db_path, record) else RestoreResult("restore_stopped")
     try:
         _write_record(db_path, {**record, "stage": "swapped"})
         _log(api, "recorded completed swap")
     except Exception as error:
-        _log(api, f"couldn't record completed swap ({type(error).__name__})")
+        _log(api, f"couldn't record completed swap ({describe_error(error)})")
         return RestoreResult("restore_stopped")
     return _open_restored(api, db_path, schema_version, record)

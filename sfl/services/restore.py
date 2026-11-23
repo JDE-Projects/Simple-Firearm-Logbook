@@ -18,6 +18,7 @@ import zipfile
 import webview
 
 from sfl import config, paths
+from sfl.debug_log import describe_error
 from sfl import storage
 from sfl.services import zip_restore_recovery
 from sfl.utils import sha256_hex
@@ -50,7 +51,7 @@ def restore_pick(window, log, schema_version=config.SCHEMA_VERSION):
             _cleanup_path(staging_dir, log)
         return outcome
     except Exception as e:
-        log(f"restore_pick failed ({type(e).__name__})")
+        log(f"restore_pick failed ({describe_error(e)})")
         return {"ok": False, "error": "Couldn't read that backup file."}
 
 
@@ -80,14 +81,14 @@ def inspect_backup(zip_path, staging_dir, log, schema_version=config.SCHEMA_VERS
         except zipfile.BadZipFile:
             return {"ok": False, "error": "That doesn't look like a valid backup file."}
         except Exception as e:
-            log(f"inspect_backup extraction failed ({type(e).__name__})")
+            log(f"inspect_backup extraction failed ({describe_error(e)})")
             return {"ok": False, "error": "Couldn't open that backup file."}
 
         manifest_path = os.path.join(staging_dir, "manifest.json")
         try:
             manifest = json.loads(storage.current().read_bytes(manifest_path).decode("utf-8"))
         except Exception as e:
-            log(f"inspect_backup manifest read failed ({type(e).__name__})")
+            log(f"inspect_backup manifest read failed ({describe_error(e)})")
             return {"ok": False, "error": "That backup file is missing its manifest."}
 
         format_version = manifest.get("format_version", 0)
@@ -138,7 +139,7 @@ def inspect_backup(zip_path, staging_dir, log, schema_version=config.SCHEMA_VERS
                         try:
                             storage.current().remove(full)
                         except Exception as e:
-                            log(f"inspect_backup: couldn't remove flagged staged file ({type(e).__name__})")
+                            log(f"inspect_backup: couldn't remove flagged staged file ({describe_error(e)})")
 
         # A backup with no database is unusable and must never restore: guard
         # the file's existence explicitly, because opening it below would
@@ -172,7 +173,7 @@ def inspect_backup(zip_path, staging_dir, log, schema_version=config.SCHEMA_VERS
                         blocked = True
                         block_reason = newer_msg
                 except sqlite3.DatabaseError as e:
-                    log(f"inspect_backup: staged database won't open ({type(e).__name__})")
+                    log(f"inspect_backup: staged database won't open ({describe_error(e)})")
                     integrity_ok = False
                     if not blocked:
                         blocked = True
@@ -207,7 +208,7 @@ def inspect_backup(zip_path, staging_dir, log, schema_version=config.SCHEMA_VERS
             "integrity_warnings": integrity_warnings,
         }
     except Exception as e:
-        log(f"inspect_backup failed ({type(e).__name__})")
+        log(f"inspect_backup failed ({describe_error(e)})")
         return {"ok": False, "error": "Couldn't read that backup file."}
 
 
@@ -252,7 +253,7 @@ def restore_commit(staging_dir, log):
         if completion == "cleanup_pending":
             log("restore_commit: swap completed; cleanup will retry at next launch")
     except Exception as e:
-        log(f"restore_commit: swap failed ({type(e).__name__})")
+        log(f"restore_commit: swap failed ({describe_error(e)})")
         if not os.path.exists(zip_restore_recovery.record_path(base)):
             return {"ok": False, "error": "Couldn't start the restore." + not_changed}
         try:
@@ -270,7 +271,7 @@ def restore_commit(staging_dir, log):
                     raise OSError("undo did not complete")
                 log("restore_commit: undo completed; cleanup will retry at next launch")
         except Exception as undo_error:
-            log(f"restore_commit: recovery required ({type(undo_error).__name__})")
+            log(f"restore_commit: recovery required ({describe_error(undo_error)})")
             return {"ok": False, "recovery_required": True, "error": f"Restore needs recovery. Files were kept in {base}."}
         return {"ok": False, "error": "Couldn't restore the backup." + not_changed}
 
@@ -286,7 +287,7 @@ def restore_commit(staging_dir, log):
         finally:
             conn.close()
     except Exception as e:
-        log(f"restore_commit: couldn't read counts from the restored database ({type(e).__name__})")
+        log(f"restore_commit: couldn't read counts from the restored database ({describe_error(e)})")
 
     log(f"Restore committed: {counts}")
     return {"ok": True, "counts": counts}
@@ -305,7 +306,7 @@ def _sqlite_opens_cleanly(db_path, log, context):
             conn.close()
         return True
     except sqlite3.DatabaseError as e:
-        log(f"{context}: staged database won't open ({type(e).__name__})")
+        log(f"{context}: staged database won't open ({describe_error(e)})")
         return False
 
 
@@ -330,7 +331,7 @@ def sweep_stale_staging(log, temp_dir=None, now=None):
     try:
         entries = list(os.scandir(temp_dir))
     except OSError as e:
-        log(f"restore: couldn't scan leftover restore folders ({type(e).__name__})")
+        log(f"restore: couldn't scan leftover restore folders ({describe_error(e)})")
         return
     for entry in entries:
         if not entry.name.startswith(STAGING_PREFIX):
@@ -343,7 +344,7 @@ def sweep_stale_staging(log, temp_dir=None, now=None):
             if now - entry.stat(follow_symlinks=False).st_mtime < STALE_STAGING_SECONDS:
                 continue
         except OSError as e:
-            log(f"restore: couldn't check leftover restore folder ({type(e).__name__})")
+            log(f"restore: couldn't check leftover restore folder ({describe_error(e)})")
             continue
         _cleanup_path(entry.path, log)
 
@@ -356,4 +357,4 @@ def _cleanup_path(path, log):
         elif os.path.isfile(path):
             os.remove(path)
     except Exception as e:
-        log(f"restore: cleanup failed ({type(e).__name__})")
+        log(f"restore: cleanup failed ({describe_error(e)})")

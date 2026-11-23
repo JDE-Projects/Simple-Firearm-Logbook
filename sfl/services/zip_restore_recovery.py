@@ -5,6 +5,7 @@ import re
 import shutil
 
 from sfl import config
+from sfl.debug_log import describe_error
 
 RECORD_FILENAME = "simple_firearm_logbook.zip_restore.json"
 STAGING_NAME_RE = re.compile(r"^\.sfl_zip_restore_stage-[0-9a-f]{8}\Z", re.ASCII)
@@ -198,7 +199,7 @@ def _remove_unrecorded(folder, log):
     try:
         entries = list(os.scandir(folder))
     except OSError as error:
-        log(f"ZIP restore recovery: couldn't scan staging folders ({type(error).__name__})")
+        log(f"ZIP restore recovery: couldn't scan staging folders ({describe_error(error)})")
         return
     for entry in entries:
         if not (STAGING_NAME_RE.fullmatch(entry.name) or ASIDE_NAME_RE.fullmatch(entry.name)):

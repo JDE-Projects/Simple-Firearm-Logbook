@@ -1030,10 +1030,10 @@ const extensionHandlers = {
   viewChanged: [],
 };
 
-function reportExtensionError(message){
+function reportExtensionError(eventName, message){
   const text = String(message);
   try {
-    const logged = api() && api().log(text);
+    const logged = api() && api().log_page_event(eventName);
     if (logged && typeof logged.then === "function") logged.catch(() => {});
   } catch (error) {
     // Logging an extension error must not interrupt the app.
@@ -1057,10 +1057,10 @@ function emitExtensionEvent(name, detail){
     try {
       const result = handler(detail);
       if (result && typeof result.then === "function") {
-        Promise.resolve(result).catch(error => reportExtensionError(extensionErrorMessage(error)));
+        Promise.resolve(result).catch(error => reportExtensionError("extension_handler_failed", extensionErrorMessage(error)));
       }
     } catch (error) {
-      reportExtensionError(extensionErrorMessage(error));
+      reportExtensionError("extension_handler_failed", extensionErrorMessage(error));
     }
   });
 }
@@ -1079,7 +1079,7 @@ window.SFL = {
     extensionHandlers[eventName].push(handler);
   },
   reportError(message){
-    reportExtensionError(message);
+    reportExtensionError("extension_reported", message);
   },
   refreshList(){ renderTable(); },
   addFilter(filter){
@@ -1114,7 +1114,7 @@ async function openDialogHook(name, context){
   const hook = dialogHooks[name];
   if (!hook || !hook.open) return;
   try { await hook.open(context); }
-  catch (error) { reportExtensionError(extensionErrorMessage(error)); }
+  catch (error) { reportExtensionError("extension_handler_failed", extensionErrorMessage(error)); }
 }
 async function collectDialogHook(name, context, errEl){
   const hook = dialogHooks[name];
@@ -1128,7 +1128,7 @@ async function collectDialogHook(name, context, errEl){
     }
     throw new Error("Dialog collect must return an ok result.");
   } catch (error) {
-    reportExtensionError(extensionErrorMessage(error));
+    reportExtensionError("extension_handler_failed", extensionErrorMessage(error));
     errEl.textContent = "Couldn't save: an extension problem stopped it.";
     return {proceed:false};
   }
@@ -1137,7 +1137,7 @@ async function doneDialogHook(name, result, context){
   const hook = dialogHooks[name];
   if (!hook || !hook.done) return;
   try { await hook.done(result, context); }
-  catch (error) { reportExtensionError(extensionErrorMessage(error)); }
+  catch (error) { reportExtensionError("extension_handler_failed", extensionErrorMessage(error)); }
 }
 function callWithExtensionData(method, args, data){
   return data === undefined ? method(...args) : method(...args, data);
@@ -1335,7 +1335,7 @@ function matchesExtensionFilter(filter, firearm){
   catch (error) {
     if (!reportedFilterErrors.has(filter.key)) {
       reportedFilterErrors.add(filter.key);
-      reportExtensionError(extensionErrorMessage(error));
+      reportExtensionError("extension_handler_failed", extensionErrorMessage(error));
     }
     return false;
   }
@@ -1353,7 +1353,7 @@ function extensionBadgeHtml(firearm){
     } catch (error) {
       if (!reportedBadgeErrors.has(fn)) {
         reportedBadgeErrors.add(fn);
-        reportExtensionError(extensionErrorMessage(error));
+        reportExtensionError("extension_handler_failed", extensionErrorMessage(error));
       }
     }
   });
@@ -2560,9 +2560,9 @@ async function boot(){
   try {
     const extension = await api().get_extension();
     if (!extension || !extension.ok) {
-      reportExtensionError("Couldn't load extension: " + ((extension && extension.error) || "The extension service didn't return a result."));
+      reportExtensionError("extension_load_failed", "Couldn't load extension: " + ((extension && extension.error) || "The extension service didn't return a result."));
     } else {
-      (extension.errors || []).forEach(reportExtensionError);
+      (extension.errors || []).forEach(message => reportExtensionError("extension_load_failed", message));
       if (typeof extension.stylesheet === "string" && extension.stylesheet) {
         const style = document.createElement("style");
         style.id = "extension-style";
@@ -2573,21 +2573,21 @@ async function boot(){
         const script = document.createElement("script");
         script.id = "extension-script";
         const onExtensionError = event => {
-          reportExtensionError("Extension script failed: " + (event.message || "Unknown error."));
+          reportExtensionError("extension_script_failed", "Extension script failed: " + (event.message || "Unknown error."));
         };
         window.addEventListener("error", onExtensionError);
         try {
           script.textContent = extension.script;
           document.head.appendChild(script);
         } catch (error) {
-          reportExtensionError("Extension script failed: " + (error && error.message ? error.message : String(error)));
+          reportExtensionError("extension_script_failed", "Extension script failed: " + (error && error.message ? error.message : String(error)));
         } finally {
           window.removeEventListener("error", onExtensionError);
         }
       }
     }
   } catch (error) {
-    reportExtensionError("Couldn't load extension: " + (error && error.message ? error.message : String(error)));
+    reportExtensionError("extension_load_failed", "Couldn't load extension: " + (error && error.message ? error.message : String(error)));
   }
 
   await Promise.all([loadFirearms(), loadAutocomplete()]);

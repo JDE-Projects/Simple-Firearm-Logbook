@@ -1,5 +1,7 @@
 """Read optional UI extension files supplied by an embedding application."""
 
+from sfl.debug_log import describe_error
+
 
 def read_extension_files(script_path, stylesheet_path, log):
     """Return the available extension text and report any file-read failures."""
@@ -13,13 +15,13 @@ def read_extension_files(script_path, stylesheet_path, log):
                 return file.read()
         except FileNotFoundError as error:
             message = f"Couldn't read extension file {path}: file was not found."
-            error_name = type(error).__name__
+            error_name = describe_error(error)
         except UnicodeDecodeError as error:
             message = f"Couldn't read extension file {path}: it is not valid UTF-8."
-            error_name = type(error).__name__
+            error_name = describe_error(error)
         except OSError as error:
             message = f"Couldn't read extension file {path}: {error}."
-            error_name = type(error).__name__
+            error_name = describe_error(error)
         errors.append(message)
         try:
             log(f"Couldn't read extension {kind} file ({error_name})")

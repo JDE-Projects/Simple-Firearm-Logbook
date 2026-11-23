@@ -8,6 +8,7 @@ import urllib.parse
 from dataclasses import dataclass
 
 from sfl import config
+from sfl.debug_log import describe_error
 
 BACKUP_TIME_LIMIT_S = 30
 BACKUP_KEEP = 5
@@ -90,7 +91,7 @@ def check_backup(path: str, schema_version: int) -> BackupCheck:
             return BackupCheck(False, False, "foreign key check failed")
         return BackupCheck(True, False, "backup passed checks")
     except Exception as error:
-        return BackupCheck(False, False, f"backup could not be checked ({type(error).__name__})")
+        return BackupCheck(False, False, f"backup could not be checked ({describe_error(error)})")
     finally:
         if conn is not None:
             try:
@@ -133,9 +134,9 @@ def create_launch_backup(conn: sqlite3.Connection, db_path: str, schema_version:
     except Exception as error:
         if temporary is not None:
             _remove_file(temporary)
-        return LaunchBackup(False, folder, f"backup could not be saved ({type(error).__name__})")
+        return LaunchBackup(False, folder, f"backup could not be saved ({describe_error(error)})")
     try:
         _prune(folder)
     except Exception as error:
-        return LaunchBackup(True, folder, f"backup saved but prune failed ({type(error).__name__})", True)
+        return LaunchBackup(True, folder, f"backup saved but prune failed ({describe_error(error)})", True)
     return LaunchBackup(True, folder, "backup saved")
