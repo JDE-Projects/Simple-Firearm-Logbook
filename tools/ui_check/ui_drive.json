@@ -49,6 +49,15 @@
       "fixture": "tools/ui_check/fixture_window_size.py",
       "timeout_s": 120
     },
+    "window-default": {
+      "script": "tools/ui_check/window_default.js",
+      "timeout_s": 120
+    },
+    "window-taskbar": {
+      "script": "tools/ui_check/window_taskbar.js",
+      "fixture": "tools/ui_check/fixture_window_taskbar.py",
+      "timeout_s": 120
+    },
     "debug-log": {
       "script": "tools/ui_check/debug_log.js",
       "fixture": "tools/ui_check/fixture_debug_log.py",
