@@ -8,6 +8,7 @@ import os
 import webview
 
 from sfl import config, paths
+from sfl.debug_log import describe_error
 from sfl.images import (
     _photo_b64_too_large,
     _photo_bytes_too_large,
@@ -103,7 +104,7 @@ def _import_photo_sources(firearm_id, row, cur, seq, has_primary, sources, writt
             seq -= 1
             failed += 1
             fail_counts["damaged"] += 1
-            log(f"Photo optimize failed ({type(e).__name__})")
+            log(f"Photo optimize failed ({describe_error(e)})")
             try:
                 if os.path.exists(target_full):
                     storage.current().remove(target_full)
@@ -201,7 +202,7 @@ def add_photos(conn, window, log, firearm_id):
                 storage.current().remove(p)
             except Exception:
                 pass
-        log(f"add_photos failed ({type(e).__name__})")
+        log(f"add_photos failed ({describe_error(e)})")
         return {"ok": False, "error": "Couldn't add the photo(s)."}
 
 
@@ -282,7 +283,7 @@ def add_photos_from_data(conn, log, firearm_id, files):
                 storage.current().remove(p)
             except Exception:
                 pass
-        log(f"add_photos_from_data failed ({type(e).__name__})")
+        log(f"add_photos_from_data failed ({describe_error(e)})")
         return {"ok": False, "error": "Couldn't add the photo(s)."}
 
 
@@ -308,7 +309,7 @@ def delete_photo(conn, log, photo_id):
             try:
                 storage.current().remove(full)
             except Exception as e:
-                log(f"Deleted photo {photo_id}, but couldn't remove its file ({type(e).__name__})")
+                log(f"Deleted photo {photo_id}, but couldn't remove its file ({describe_error(e)})")
                 warning = (
                     "The photo was deleted, but its file could not be removed from disk. "
                     "See the log for details."
@@ -320,7 +321,7 @@ def delete_photo(conn, log, photo_id):
         return result
     except Exception as e:
         conn.rollback()
-        log(f"delete_photo failed ({type(e).__name__})")
+        log(f"delete_photo failed ({describe_error(e)})")
         return {"ok": False, "error": "Couldn't delete the photo."}
 
 
@@ -338,7 +339,7 @@ def set_primary_photo(conn, log, photo_id):
         return {"ok": True, "photos": _get_photos(conn, firearm_id)}
     except Exception as e:
         conn.rollback()
-        log(f"set_primary_photo failed ({type(e).__name__})")
+        log(f"set_primary_photo failed ({describe_error(e)})")
         return {"ok": False, "error": "Couldn't set the primary photo."}
 
 
@@ -356,5 +357,5 @@ def get_photo_data(log, filename):
         b64 = base64.b64encode(data).decode("ascii")
         return {"ok": True, "data_uri": f"data:{mime};base64,{b64}"}
     except Exception as e:
-        log(f"get_photo_data failed ({type(e).__name__})")
+        log(f"get_photo_data failed ({describe_error(e)})")
         return {"ok": False, "error": "Couldn't load that photo."}

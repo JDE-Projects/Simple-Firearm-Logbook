@@ -7,6 +7,7 @@ import urllib.parse
 import urllib.request
 
 from sfl import config
+from sfl.debug_log import describe_error
 from sfl.errors import _update_error_reason
 from sfl.prefs import load_prefs, save_prefs
 
@@ -72,7 +73,7 @@ def check_update(log):
     except Exception as e:
         result["offline"] = True
         result["reason"] = _update_error_reason(e)
-        log(f"check_update failed ({type(e).__name__})")
+        log(f"check_update failed ({describe_error(e)})")
     return result
 
 

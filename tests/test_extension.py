@@ -55,7 +55,7 @@ def test_read_extension_files_loads_stylesheet_when_script_is_missing(tmp_path):
     assert len(result["errors"]) == 1
     assert str(script_path) in result["errors"][0]
     assert str(script_path) not in messages[0]
-    assert "Couldn't read extension script file (FileNotFoundError)" in messages[0]
+    assert "Couldn't read extension script file (FileNotFoundError:" in messages[0]
 
 
 def test_read_extension_files_reports_non_utf8_file(tmp_path):

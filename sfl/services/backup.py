@@ -12,6 +12,7 @@ import webview
 
 from sfl import config, paths
 from sfl import storage
+from sfl.debug_log import describe_error
 from sfl.utils import sha256_hex
 
 
@@ -35,7 +36,7 @@ def create_backup(conn, window, log):
         outcome["path"] = path
         return outcome
     except Exception as e:
-        log(f"create_backup failed ({type(e).__name__})")
+        log(f"create_backup failed ({describe_error(e)})")
         return {"ok": False, "error": "Couldn't create the backup."}
 
 
@@ -101,5 +102,5 @@ def _write_backup_zip(conn, dest_path, log):
         log(f"Backup created: {counts['firearms']} firearm(s), {len(missing)} missing file(s)")
         return {"ok": True, "missing": missing, "counts": counts}
     except Exception as e:
-        log(f"_write_backup_zip failed ({type(e).__name__})")
+        log(f"_write_backup_zip failed ({describe_error(e)})")
         return {"ok": False, "error": "Couldn't create the backup."}

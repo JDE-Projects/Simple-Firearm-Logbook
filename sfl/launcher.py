@@ -9,6 +9,7 @@ import webview
 
 from sfl import config, platform_win, startup
 from sfl.api import Api
+from sfl.debug_log import describe_error
 from sfl.db import open_db
 from sfl.paths import app_dir, resource_path
 from sfl.remote_debug import strip_remote_debugging
@@ -101,7 +102,7 @@ def run(description: AppDescription | None = None) -> None:
         try:
             zip_recovery = zip_restore_recovery.recover(folder, api._log)
         except Exception as error:
-            api._log(f"ZIP restore recovery stopped unexpectedly ({type(error).__name__})")
+            api._log(f"ZIP restore recovery stopped unexpectedly ({describe_error(error)})")
             zip_recovery = "stopped"
     if zip_recovery == "stopped":
         platform_win._show_zip_restore_stopped_error(folder, description.product_name)

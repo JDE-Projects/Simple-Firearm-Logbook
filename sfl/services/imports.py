@@ -4,6 +4,7 @@ functions that add the file picker, the database, and the transaction."""
 from sfl import csv_import
 from sfl import storage
 from sfl.config import IMPORT_FIELDS
+from sfl.debug_log import describe_error
 from sfl.db import SaveRejected, _firearm_row_to_dict
 
 
@@ -44,7 +45,7 @@ def import_csv_pick(window, log, extension_fields=()):
             ),
         }
     except Exception as e:
-        log(f"import_csv_pick failed ({type(e).__name__})")
+        log(f"import_csv_pick failed ({describe_error(e)})")
         return {"ok": False, "error": "Couldn't read that CSV file."}
 
 
@@ -64,7 +65,7 @@ def import_csv_preview(conn, log, rows, mapping, extension_fields=()):
         )
         return {"ok": True, "preview": preview}
     except Exception as e:
-        log(f"import_csv_preview failed ({type(e).__name__})")
+        log(f"import_csv_preview failed ({describe_error(e)})")
         return {"ok": False, "error": "Couldn't validate that file."}
 
 
@@ -95,9 +96,9 @@ def import_csv_commit(conn, log, records, before_save=None):
         return {"ok": True, "imported": len(imported), "log_numbers": imported}
     except SaveRejected as e:
         conn.rollback()
-        log(f"import_csv_commit rejected ({type(e).__name__})")
+        log(f"import_csv_commit rejected ({describe_error(e)})")
         return {"ok": False, "error": str(e)}
     except Exception as e:
         conn.rollback()
-        log(f"import_csv_commit failed ({type(e).__name__})")
+        log(f"import_csv_commit failed ({describe_error(e)})")
         return {"ok": False, "error": "Couldn't import the file. Nothing was saved."}

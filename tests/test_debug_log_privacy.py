@@ -76,7 +76,7 @@ def test_extension_read_failure_logs_fixed_line(tmp_path):
     logs = []
     result = extension.read_extension_files(str(path), None, logs.append)
     assert str(path) in result["errors"][0]
-    assert MARKER not in "\n".join(logs) and "Couldn't read extension script file (FileNotFoundError)" in logs
+    assert MARKER not in "\n".join(logs) and "Couldn't read extension script file (FileNotFoundError:" in logs[0]
 
 
 def test_debug_log_scan_warning_keeps_path_out_of_log(tmp_path, monkeypatch):
