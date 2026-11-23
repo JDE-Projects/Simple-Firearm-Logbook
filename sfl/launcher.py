@@ -155,11 +155,11 @@ def run(description: AppDescription | None = None) -> None:
         background_color="#0a0e14",
     )
     api.set_window(win)
-    win.events.shown += lambda: platform_win._restore_geometry(win)
+    win.events.shown += lambda: platform_win._restore_geometry(win, api._log)
     win.events.loaded += api.flush_debug_warnings
 
     def _on_window_closing():
-        platform_win._save_geometry(win)
+        platform_win._save_geometry(win, api._log)
         return True
 
     win.events.closing += _on_window_closing

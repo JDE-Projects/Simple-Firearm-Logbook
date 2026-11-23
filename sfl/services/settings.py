@@ -11,21 +11,21 @@ from sfl.errors import _update_error_reason
 from sfl.prefs import load_prefs, save_prefs
 
 
-def _load_theme() -> str:
-    theme = load_prefs().get("theme")
+def _load_theme(log=None) -> str:
+    theme = load_prefs(log).get("theme")
     return theme if theme in ("dark", "light") else "dark"
 
 
-def get_theme():
-    return _load_theme()
+def get_theme(log=None):
+    return _load_theme(log)
 
 
 def save_theme(log, theme: str):
     if theme not in ("dark", "light"):
         return {"ok": False}
-    prefs = load_prefs()
+    prefs = load_prefs(log)
     prefs["theme"] = theme
-    if save_prefs(prefs):
+    if save_prefs(prefs, log):
         log(f"Theme set to {theme}")
         return {"ok": True}
     log("Could not save theme pref")

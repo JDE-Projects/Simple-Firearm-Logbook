@@ -69,7 +69,7 @@ def desktop(monkeypatch):
         monkeypatch.setattr(pw, "_frame_insets", lambda hwnd: (0, 0, 0, 0))
         monkeypatch.setattr(pw.time, "sleep", lambda seconds: None)
         prefs_data = {} if saved is None else {"window": saved}
-        monkeypatch.setattr(pw.prefs, "load_prefs", lambda: prefs_data)
+        monkeypatch.setattr(pw.prefs, "load_prefs", lambda log=None: prefs_data)
         return fake
 
     return setup
