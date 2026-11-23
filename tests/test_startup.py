@@ -256,6 +256,15 @@ def test_folder_lock_refuses_a_second_handle(tmp_path):
             handle.close()
 
 
+def test_app_window_class_matches_qt_windows_only():
+    assert platform_win._is_app_window_class("Qt6112QWindowIcon") is True
+    assert platform_win._is_app_window_class("Qt5QWindowIcon") is True
+    assert platform_win._is_app_window_class("CabinetWClass") is False   # File Explorer
+    assert platform_win._is_app_window_class("Chrome_WidgetWin_1") is False
+    assert platform_win._is_app_window_class("Qt6112QWindowToolSaveBits") is False
+    assert platform_win._is_app_window_class("") is False
+
+
 def _backups(tmp_path):
     folder = tmp_path / config.BACKUPS_DIRNAME
     return sorted(p.name for p in folder.glob("*.db")) if folder.exists() else []
