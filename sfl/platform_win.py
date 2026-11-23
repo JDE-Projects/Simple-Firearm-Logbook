@@ -470,6 +470,11 @@ def _acquire_single_instance(mutex_name: str) -> bool:
     # Name convention: "JDE_Simple{Thing}Tool_SingleInstance"
     # Session-local (no "Global\" prefix): each Windows session (e.g. RDP,
     # fast user switching) gets its own instance instead of colliding across users.
+    #
+    # Fails open when Windows cannot create the mutex. That is safe here
+    # because every file the app writes lives in its own folder, and
+    # launcher.run takes the folder lock (_acquire_folder_lock) before touching
+    # any of them, so a second copy using the same data still stops there.
     global _mutex_handle
     try:
         # use_last_error=True: ctypes.windll's GetLastError() can be clobbered
@@ -478,7 +483,14 @@ def _acquire_single_instance(mutex_name: str) -> bool:
         _mutex_handle = kernel32.CreateMutexW(None, False, mutex_name)
         return ctypes.get_last_error() != 183   # ERROR_ALREADY_EXISTS
     except Exception:
-        return True   # fail open: never block launch over a mutex error
+        return True   # fail open: the folder lock still guards the data
+
+
+def _is_app_window_class(class_name: str) -> bool:
+    # The Qt window's class is "Qt<version>QWindowIcon", e.g. Qt6112QWindowIcon.
+    # Checking it stops a File Explorer window for a folder with the same name
+    # from being taken for the app.
+    return class_name.startswith("Qt") and class_name.endswith("QWindowIcon")
 
 
 def _focus_existing_window(app_title: str) -> bool:
@@ -500,10 +512,14 @@ def _focus_existing_window(app_title: str) -> bool:
             # Exact match only: a prefix match could hit an unrelated window
             # (e.g. a browser tab starting with the app name). A miss falls
             # through to a normal launch anyway.
-            if buf.value == app_title:
-                found["hwnd"] = hwnd
-                return False   # stop enumerating, match found
-            return True
+            if buf.value != app_title:
+                return True
+            cls = ctypes.create_unicode_buffer(256)
+            user32.GetClassNameW(hwnd, cls, 256)
+            if not _is_app_window_class(cls.value):
+                return True
+            found["hwnd"] = hwnd
+            return False   # stop enumerating, match found
 
         user32.EnumWindows(WNDENUMPROC(_enum_proc), 0)
 

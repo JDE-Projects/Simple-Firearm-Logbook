@@ -239,6 +239,40 @@ def test_run_stops_when_single_instance_cannot_be_focused(monkeypatch, tmp_path)
     assert calls == [(str(tmp_path), "Simple Firearm Logbook")]
 
 
+def test_failed_single_instance_lock_still_stops_at_folder_lock(monkeypatch, tmp_path):
+    # When Windows cannot create the single-instance lock, launch continues,
+    # and a copy already holding this data folder still stops the new one.
+    msvcrt = pytest.importorskip("msvcrt")
+
+    def _refuse(*args, **kwargs):
+        raise OSError("mutex unavailable")
+
+    monkeypatch.setattr(launcher.platform_win.ctypes, "WinDLL", _refuse)
+    assert launcher.platform_win._acquire_single_instance("Example_Lock") is True
+    monkeypatch.undo()
+
+    calls = []
+    monkeypatch.setattr(launcher, "app_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(launcher.platform_win, "_acquire_single_instance", lambda name: True)
+    monkeypatch.setattr(launcher.platform_win, "_show_already_running_error", lambda *args: calls.append(args))
+    monkeypatch.setattr(launcher.platform_win, "_folder_lock_handle", None)
+    other_copy = open(os.path.join(str(tmp_path), config.LOCK_FILENAME), "a+b")
+    try:
+        other_copy.write(b"\0")
+        other_copy.flush()
+        other_copy.seek(0)
+        msvcrt.locking(other_copy.fileno(), msvcrt.LK_NBLCK, 1)
+        with pytest.raises(SystemExit) as exited:
+            launcher.run()
+    finally:
+        other_copy.seek(0)
+        msvcrt.locking(other_copy.fileno(), msvcrt.LK_UNLCK, 1)
+        other_copy.close()
+
+    assert exited.value.code == 1
+    assert calls == [(str(tmp_path), "Simple Firearm Logbook")]
+
+
 def test_run_stops_when_folder_lock_is_refused(monkeypatch, tmp_path):
     calls = []
     monkeypatch.setattr(launcher, "app_dir", lambda: str(tmp_path))
