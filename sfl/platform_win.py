@@ -151,7 +151,7 @@ def _own_window_handle(title):
         return None
 
 
-def _save_geometry(win) -> None:
+def _save_geometry(win, log=None) -> None:
     """Save the absolute frame rect (physical px) via Win32. Wire to `closing`.
     Wrapped end to end so a failure here can never block the window from closing."""
     try:
@@ -167,9 +167,9 @@ def _save_geometry(win) -> None:
             return
         if w <= 0 or h <= 0:
             return
-        prefs_data = prefs.load_prefs()
+        prefs_data = prefs.load_prefs(log)
         prefs_data["window"] = {"x": x, "y": y, "width": w, "height": h}
-        prefs.save_prefs(prefs_data)
+        prefs.save_prefs(prefs_data, log)
     except Exception:
         pass
 
@@ -209,11 +209,11 @@ def _is_minimized_or_maximized(u, hwnd) -> bool:
     return bool(u.IsIconic(hwnd)) or bool(u.IsZoomed(hwnd))
 
 
-def _saved_rect_and_work_area():
+def _saved_rect_and_work_area(log=None):
     """The saved frame rect and the work area of the monitor it sits on, or
     None when there is no usable saved rect: none saved, malformed, or its
     monitor is no longer connected."""
-    geo = prefs.load_prefs().get("window")
+    geo = prefs.load_prefs(log).get("window")
     if not isinstance(geo, dict):
         return None
     x, y, w, h = geo.get("x"), geo.get("y"), geo.get("width"), geo.get("height")
@@ -239,7 +239,7 @@ def _saved_rect_and_work_area():
     return (x, y, w, h), work
 
 
-def _restore_geometry(win) -> None:
+def _restore_geometry(win, log=None) -> None:
     """Place the window once per launch: restore the saved frame rect fitted
     to its monitor's work area, then fit wherever the window ended up. With no
     usable saved rect this fits the default size where Qt placed it, so the
@@ -254,7 +254,7 @@ def _restore_geometry(win) -> None:
         if not hwnd:
             return
         SWP_NOZORDER, SWP_NOACTIVATE = 0x0004, 0x0010
-        saved = _saved_rect_and_work_area()
+        saved = _saved_rect_and_work_area(log)
         if saved is not None and not _is_minimized_or_maximized(u, hwnd):
             rect, work = saved
             fitted = fit_rect_to_work_area(*rect, work, _frame_insets(hwnd))

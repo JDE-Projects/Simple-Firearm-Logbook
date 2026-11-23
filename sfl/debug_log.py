@@ -1,8 +1,22 @@
 import json
 import os
 import re
+import sqlite3
 import threading
 from datetime import datetime
+
+
+def describe_error(error):
+    """Describe an error for the debug log without its message, which can
+    quote a typed value or a file path. Gives the error kind, plus SQLite's
+    fixed error name or Windows's fixed reason when there is one."""
+    type_name = type(error).__name__
+    sqlite_errorname = getattr(error, "sqlite_errorname", None)
+    if isinstance(error, sqlite3.Error) and sqlite_errorname:
+        return f"{type_name}: {sqlite_errorname}"
+    if isinstance(error, OSError) and error.strerror:
+        return f"{type_name}: {error.strerror}"
+    return type_name
 
 
 # Apps copy this file in as app/debug_log.py. It only writes and prunes log files;

@@ -19,7 +19,7 @@ def _get_firearm_row(conn, firearm_id):
 
 def get_config(log):
     try:
-        return {"ok": True, "version": config.APP_VERSION, "theme": settings_service._load_theme()}
+        return {"ok": True, "version": config.APP_VERSION, "theme": settings_service._load_theme(log)}
     except Exception as e:
         log(f"get_config failed ({type(e).__name__})")
         return {"ok": False, "error": "Couldn't load the app's configuration."}

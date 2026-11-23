@@ -405,10 +405,10 @@ class Api:
 
     # --- preferences (local file, not stored in the db) ----------------------
     def _load_theme(self) -> str:
-        return settings_service._load_theme()
+        return settings_service._load_theme(self._log)
 
     def get_theme(self):
-        return settings_service.get_theme()
+        return settings_service.get_theme(self._log)
 
     def save_theme(self, theme: str):
         return settings_service.save_theme(self._log, theme)

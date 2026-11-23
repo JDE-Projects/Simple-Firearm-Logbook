@@ -137,8 +137,8 @@ def test_run_uses_custom_api_and_database_preparer_and_sets_config(monkeypatch, 
         "recover",
         lambda folder, log: (calls.setdefault("order", []).append("zip_recovery"), "finished")[1],
     )
-    monkeypatch.setattr(launcher.platform_win, "_restore_geometry", lambda win: None)
-    monkeypatch.setattr(launcher.platform_win, "_save_geometry", lambda win: None)
+    monkeypatch.setattr(launcher.platform_win, "_restore_geometry", lambda win, log=None: None)
+    monkeypatch.setattr(launcher.platform_win, "_save_geometry", lambda win, log=None: None)
     monkeypatch.setattr(
         launcher.platform_win, "_show_restore_complete_info", lambda *args: calls.setdefault("order", []).append("notice")
     )
