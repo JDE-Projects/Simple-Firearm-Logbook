@@ -15,6 +15,7 @@ import ctypes
 import ctypes.wintypes as wintypes
 import msvcrt
 import os
+import threading
 import time
 
 from sfl import config, prefs
@@ -173,47 +174,101 @@ def _save_geometry(win) -> None:
         pass
 
 
+_restore_lock = threading.Lock()
+_restore_claimed = False
+
+
+def _claim_restore() -> bool:
+    """True the first time it is called, False after. pywebview's Qt backend
+    fires `shown` on every show event, including each restore from the
+    taskbar, and the window should be placed only once per launch."""
+    global _restore_claimed
+    with _restore_lock:
+        if _restore_claimed:
+            return False
+        _restore_claimed = True
+        return True
+
+
+def _wait_for_window_handle(title, attempts=20, delay=0.1):
+    """HWND of our window, retrying briefly: `shown` can fire just before the
+    window is visible, when _own_window_handle cannot find it yet."""
+    for _ in range(attempts):
+        hwnd = _own_window_handle(title)
+        if hwnd:
+            return hwnd
+        time.sleep(delay)
+    return None
+
+
+def _is_minimized_or_maximized(u, hwnd) -> bool:
+    u.IsIconic.argtypes = [wintypes.HWND]
+    u.IsIconic.restype = wintypes.BOOL
+    u.IsZoomed.argtypes = [wintypes.HWND]
+    u.IsZoomed.restype = wintypes.BOOL
+    return bool(u.IsIconic(hwnd)) or bool(u.IsZoomed(hwnd))
+
+
+def _saved_rect_and_work_area():
+    """The saved frame rect and the work area of the monitor it sits on, or
+    None when there is no usable saved rect: none saved, malformed, or its
+    monitor is no longer connected."""
+    geo = prefs.load_prefs().get("window")
+    if not isinstance(geo, dict):
+        return None
+    x, y, w, h = geo.get("x"), geo.get("y"), geo.get("width"), geo.get("height")
+    for v in (x, y, w, h):
+        if not isinstance(v, int) or isinstance(v, bool):
+            return None
+    if w <= 0 or h <= 0:
+        return None
+    # Confirm a point inside the title bar area is still on a connected
+    # monitor; MonitorFromPoint returns NULL if it isn't (for example the
+    # saved monitor has been unplugged since the last launch).
+    point = wintypes.POINT(x + 100, y + 30)
+    user32 = ctypes.windll.user32
+    user32.MonitorFromPoint.argtypes = [wintypes.POINT, wintypes.DWORD]
+    user32.MonitorFromPoint.restype = wintypes.HMONITOR
+    MONITOR_DEFAULTTONULL = 0
+    hmonitor = user32.MonitorFromPoint(point, MONITOR_DEFAULTTONULL)
+    if not hmonitor:
+        return None
+    work = _monitor_work_area(hmonitor)
+    if work is None:
+        return None
+    return (x, y, w, h), work
+
+
 def _restore_geometry(win) -> None:
-    """Restore the saved frame rect via Win32, fitted to its monitor's work
-    area. Wired to `shown` after the OS window exists; never raises."""
+    """Place the window once per launch: restore the saved frame rect fitted
+    to its monitor's work area, then fit wherever the window ended up. With no
+    usable saved rect this fits the default size where Qt placed it, so the
+    title bar is never left above or beside the screen. When the window's
+    minimum size is larger than the screen, its top-left corner stays on
+    screen. Wired to `shown` after the OS window exists; never raises."""
     try:
-        geo = prefs.load_prefs().get("window")
-        if not isinstance(geo, dict):
-            return
-        x, y, w, h = geo.get("x"), geo.get("y"), geo.get("width"), geo.get("height")
-        for v in (x, y, w, h):
-            if not isinstance(v, int) or isinstance(v, bool):
-                return
-        if w <= 0 or h <= 0:
-            return
-        # Confirm a point inside the title bar area is still on a connected
-        # monitor; MonitorFromPoint returns NULL if it isn't (for example the
-        # saved monitor has been unplugged since the last launch).
-        point = wintypes.POINT(x + 100, y + 30)
-        user32 = ctypes.windll.user32
-        user32.MonitorFromPoint.argtypes = [wintypes.POINT, wintypes.DWORD]
-        user32.MonitorFromPoint.restype = wintypes.HMONITOR
-        MONITOR_DEFAULTTONULL = 0
-        hmonitor = user32.MonitorFromPoint(point, MONITOR_DEFAULTTONULL)
-        if not hmonitor:
-            return
-        work = _monitor_work_area(hmonitor)
-        if work is None:
+        if not _claim_restore():
             return
         u = _win32()
-        hwnd = _own_window_handle(win.title)
+        hwnd = _wait_for_window_handle(win.title)
         if not hwnd:
             return
         SWP_NOZORDER, SWP_NOACTIVATE = 0x0004, 0x0010
-        rect = fit_rect_to_work_area(x, y, w, h, work, _frame_insets(hwnd))
-        u.SetWindowPos(hwnd, None, *rect, SWP_NOZORDER | SWP_NOACTIVATE)
+        saved = _saved_rect_and_work_area()
+        if saved is not None and not _is_minimized_or_maximized(u, hwnd):
+            rect, work = saved
+            fitted = fit_rect_to_work_area(*rect, work, _frame_insets(hwnd))
+            u.SetWindowPos(hwnd, None, *fitted, SWP_NOZORDER | SWP_NOACTIVATE)
 
         # pywebview runs `shown` callbacks on a worker thread, so this delay
         # does not block Qt while it finishes any DPI-driven resize.
         time.sleep(0.3)
+        if _is_minimized_or_maximized(u, hwnd):
+            return
         current = wintypes.RECT()
         if not u.GetWindowRect(hwnd, ctypes.byref(current)):
             return
+        user32 = ctypes.windll.user32
         user32.MonitorFromWindow.argtypes = [wintypes.HWND, wintypes.DWORD]
         user32.MonitorFromWindow.restype = wintypes.HMONITOR
         MONITOR_DEFAULTTONEAREST = 2

@@ -1,6 +1,6 @@
 """Tests for fit_rect_to_work_area, the pure fitting math behind
-_restore_geometry. The Win32 calls around it need a live desktop window and
-are covered by the manual smoke test instead.
+_restore_geometry. The decisions around it are in test_window_restore.py,
+with the Win32 calls faked.
 """
 
 from sfl import platform_win as app
