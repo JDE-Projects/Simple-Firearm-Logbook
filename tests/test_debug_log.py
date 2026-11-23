@@ -4,8 +4,9 @@ import glob
 import json
 import os
 import re
+import sqlite3
 
-from sfl.debug_log import DebugLog
+from sfl.debug_log import DebugLog, describe_error
 
 
 def _stamped_name(stamp, suffix=None):
@@ -328,3 +329,21 @@ def test_existing_picked_name_is_not_overwritten(tmp_path, monkeypatch):
     assert read(existing) == "keep this content"
     assert dbg.is_enabled() is False
     assert len(warnings) == 1
+
+
+def test_describe_error_sqlite_keeps_code_drops_message():
+    try:
+        sqlite3.connect(":memory:").execute("SELEC MARKERWORD")
+    except sqlite3.Error as error:
+        description = describe_error(error)
+    assert description.startswith("OperationalError")
+    assert "MARKERWORD" not in description
+
+
+def test_describe_error_oserror_drops_path():
+    error = PermissionError(13, "Permission denied", r"C:\Users\Me\MARKERWORD logbook.db")
+    assert describe_error(error) == "PermissionError: Permission denied"
+
+
+def test_describe_error_other_errors_give_type_only():
+    assert describe_error(ValueError("could not convert string to float: 'MARKERWORD'")) == "ValueError"
