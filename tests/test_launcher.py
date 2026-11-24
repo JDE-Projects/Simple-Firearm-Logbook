@@ -225,6 +225,33 @@ def test_run_reports_non_ready_database_outcome(monkeypatch, tmp_path, outcome, 
         assert calls == [message_args]
 
 
+def test_run_shows_prepared_message_instead_of_outcome_box(monkeypatch, tmp_path):
+    description = launcher.AppDescription(
+        "Embedding Logbook", "Example.EmbeddingLogbook", "Example_EmbeddingLogbook", "1.0.0",
+        "example-owner", "example-repo", "https://example.invalid/update",
+        prepare_database=lambda *_args: startup.PreparedDatabase(
+            "encrypted", None, "test", message="Use the edition-specific message."
+        ),
+    )
+    calls = []
+    monkeypatch.setattr(launcher, "app_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(launcher.platform_win, "_acquire_single_instance", lambda _name: True)
+    monkeypatch.setattr(launcher.platform_win, "_writable_check", lambda _folder: True)
+    monkeypatch.setattr(launcher.platform_win, "_acquire_folder_lock", lambda _folder: True)
+    monkeypatch.setattr(
+        launcher.platform_win, "_show_database_message_error", lambda *args: calls.append(("generic", args))
+    )
+    monkeypatch.setattr(
+        launcher.platform_win, "_show_encrypted_database_error", lambda *args: calls.append(("encrypted", args))
+    )
+
+    with pytest.raises(SystemExit) as exited:
+        launcher.run(description)
+
+    assert exited.value.code == 1
+    assert calls == [("generic", ("Use the edition-specific message.", "Embedding Logbook"))]
+
+
 def test_run_stops_when_single_instance_cannot_be_focused(monkeypatch, tmp_path):
     calls = []
     monkeypatch.setattr(launcher.platform_win, "_acquire_single_instance", lambda name: False)

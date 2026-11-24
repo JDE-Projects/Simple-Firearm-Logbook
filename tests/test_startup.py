@@ -4,8 +4,11 @@ import subprocess
 import sys
 import time
 
+import pytest
+
 from sfl import config, platform_win, startup
 from sfl.db import open_db
+from sfl.services import launch_backup, launch_restore
 
 
 class FakeApi:
@@ -105,6 +108,21 @@ def test_pro_stamped_database_is_refused(tmp_path):
 
     assert result.outcome == "pro_stamped"
     assert result.conn is None
+
+
+def test_pro_stamped_populated_database_is_ready_when_accepted(tmp_path):
+    path = tmp_path / config.DB_FILENAME
+    _add_firearm(path)
+    conn = sqlite3.connect(path)
+    conn.execute(f"PRAGMA application_id = {config.PRO_APPLICATION_ID}")
+    conn.commit()
+    conn.close()
+
+    _, result = _prepare_with_options(path, accept_pro=True)
+
+    assert result.outcome == "ready"
+    assert result.conn.execute("SELECT COUNT(*) FROM firearms").fetchone()[0] == 1
+    result.conn.close()
 
 
 def test_newer_database_is_refused(tmp_path):
@@ -279,6 +297,109 @@ def _add_firearm(path):
     conn.execute("UPDATE counters SET next_log_number=2 WHERE id=1")
     conn.commit()
     conn.close()
+
+
+def _prepare_with_options(path, **options):
+    api = FakeApi()
+    result = startup.prepare_database(api, str(path), config.SCHEMA_VERSION, **options)
+    return api, result
+
+
+@pytest.mark.parametrize(
+    "path_kind",
+    ["resumed_restore", "missing", "zero_byte", "schema_empty", "restored_damaged", "normal"],
+)
+def test_finish_runs_once_for_each_ready_path(tmp_path, monkeypatch, path_kind):
+    path = tmp_path / config.DB_FILENAME
+    if path_kind == "resumed_restore":
+        restored = open_db(str(path))
+        monkeypatch.setattr(
+            startup.launch_restore, "recover",
+            lambda *_args: launch_restore.RestoreResult("ready", restored, "restored"),
+        )
+    elif path_kind == "zero_byte":
+        path.touch()
+    elif path_kind == "schema_empty":
+        sqlite3.connect(path).close()
+    elif path_kind == "restored_damaged":
+        backup_folder = tmp_path / config.BACKUPS_DIRNAME
+        backup_folder.mkdir()
+        open_db(str(backup_folder / "simple_firearm_logbook-20261026-090500-000000.db")).close()
+        path.write_bytes(b"not SQLite")
+    elif path_kind == "normal":
+        open_db(str(path)).close()
+
+    finished = []
+    _, result = _prepare_with_options(path, finish=finished.append)
+
+    assert result.outcome == "ready"
+    assert finished == [result.conn]
+    result.conn.close()
+
+
+def test_failing_finish_closes_restored_connection_and_keeps_restore_record(tmp_path):
+    path = tmp_path / config.DB_FILENAME
+    backup_folder = tmp_path / config.BACKUPS_DIRNAME
+    backup_folder.mkdir()
+    open_db(str(backup_folder / "simple_firearm_logbook-20261026-090500-000000.db")).close()
+    path.write_bytes(b"not SQLite")
+    seen = []
+
+    def broken_finish(conn):
+        seen.append(conn)
+        raise RuntimeError("finish failed")
+
+    _, result = _prepare_with_options(path, finish=broken_finish)
+
+    assert result.outcome == "unavailable"
+    assert result.conn is None
+    with pytest.raises(sqlite3.ProgrammingError):
+        seen[0].execute("SELECT 1")
+    assert (tmp_path / launch_restore.RECORD_FILENAME).exists()
+
+
+@pytest.mark.parametrize(
+    "edition_check",
+    [lambda _conn: True, lambda _conn: (_ for _ in ()).throw(RuntimeError("broken check"))],
+)
+def test_edition_backup_check_takes_backup_for_empty_logbook(tmp_path, edition_check):
+    path = tmp_path / config.DB_FILENAME
+    open_db(str(path)).close()
+
+    _, result = _prepare_with_options(path, needs_backup=edition_check)
+
+    assert result.outcome == "ready"
+    assert len(_backups(tmp_path)) == 1
+    result.conn.close()
+
+
+@pytest.mark.parametrize(
+    "edition_check",
+    [lambda _conn: True, lambda _conn: (_ for _ in ()).throw(RuntimeError("broken check"))],
+)
+def test_edition_schema_change_blocks_when_launch_backup_fails(tmp_path, monkeypatch, edition_check):
+    path = tmp_path / config.DB_FILENAME
+    open_db(str(path)).close()
+    monkeypatch.setattr(
+        startup.launch_backup, "create_launch_backup",
+        lambda *_args: launch_backup.LaunchBackup(False, str(tmp_path / config.BACKUPS_DIRNAME), "backup failed"),
+    )
+
+    _, result = _prepare_with_options(path, needs_backup=lambda _conn: True, would_change=edition_check)
+
+    assert result.outcome == "upgrade_blocked"
+    assert result.conn is None
+
+
+@pytest.mark.parametrize("message", ["Open this edition instead.", None])
+def test_failure_message_is_attached_to_non_ready_result(tmp_path, message):
+    path = tmp_path / config.DB_FILENAME
+    path.write_bytes(config.PRO_ENCRYPTED_MAGIC + b"encrypted data")
+
+    _, result = _prepare_with_options(path, failure_message=lambda outcome: message if outcome == "encrypted" else None)
+
+    assert result.outcome == "encrypted"
+    assert result.message == message
 
 
 def test_empty_logbook_skips_launch_backup(tmp_path):

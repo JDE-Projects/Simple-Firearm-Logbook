@@ -116,7 +116,9 @@ def run(description: AppDescription | None = None) -> None:
         api.add_launch_notice("Some leftover files from an interrupted backup restore couldn't be removed from the data folder yet. The app will try again next time it opens.")
     prepared = description.prepare_database(api, db_path, description.schema_version)
     if prepared.outcome != "ready":
-        if prepared.outcome == "unavailable":
+        if prepared.message is not None:
+            platform_win._show_database_message_error(prepared.message, description.product_name)
+        elif prepared.outcome == "unavailable":
             platform_win._show_database_unavailable_error(db_path, description.product_name)
         elif prepared.outcome == "damaged":
             platform_win._show_database_damaged_error(db_path, description.product_name)
