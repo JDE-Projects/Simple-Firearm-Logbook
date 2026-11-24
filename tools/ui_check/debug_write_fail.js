@@ -18,7 +18,7 @@ export default async function debugWriteFail(helpers) {
     " && document.getElementById('toast').textContent.includes('write failed')";
   let shown = false;
   for (let i = 0; i < 40 && !shown; i++) {
-    await evaluate("api().log('ui check write ' + Date.now()).then(() => 'ok')");
+    await evaluate("api().log_page_event('ui_check_write').then(() => 'ok')");
     shown = await evaluate(failed);
     if (!shown) await new Promise(r => setTimeout(r, 200));
   }
