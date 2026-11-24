@@ -423,6 +423,13 @@ def _show_encrypted_database_error(product_name: str = "Simple Firearm Logbook")
         pass
 
 
+def _show_database_message_error(message: str, product_name: str = "Simple Firearm Logbook"):
+    try:
+        ctypes.windll.user32.MessageBoxW(0, message, product_name, 0x10)
+    except Exception:  # noqa: BLE001, S110 - a native error box is best effort.
+        pass
+
+
 def _show_newer_schema_error(product_name: str = "Simple Firearm Logbook", opened_by_pro=False):
     if opened_by_pro:
         msg = (
