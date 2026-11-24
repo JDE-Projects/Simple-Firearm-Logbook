@@ -5,7 +5,7 @@ on:
     tags: ['v*']
 jobs:
   release:
-    uses: JDE-Projects/Build-Tools/.github/workflows/release.yml@1d4a3410cface7851db0d1b8da35d0c71b22cd3d # Build-Tools main (CI checks: ruff, import, pytest, runtime lock check; draft-then-publish)
+    uses: JDE-Projects/Build-Tools/.github/workflows/release.yml@879390eb848d0cea48fe41c2959fd6e5d027a8a5 # Build-Tools main (CI checks: ruff, import, pytest, runtime lock check, license notices check; draft-then-publish)
     permissions:
       id-token: write
       attestations: write
@@ -13,7 +13,6 @@ jobs:
     with:
       app_name: SimpleFirearmLogbook
       dist_subfolder: "Simple Firearm Logbook"
-      python_version: "3.14"
       build_command: "Build_Simple_Firearm_Logbook.bat"
       app_id: "03849f99-e535-4ae8-aff7-bc442f6a868b"
       entry_script: "simple_firearm_logbook.py"
