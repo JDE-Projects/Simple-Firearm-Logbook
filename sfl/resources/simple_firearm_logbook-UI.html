@@ -60,6 +60,9 @@ body.light {
 *::-webkit-scrollbar-button { display:none; height:0; width:0; }
 *::-webkit-scrollbar-corner { background:transparent; }
 
+/* ---- keep the wheel inside each scroll area at its edges (some mice otherwise stop scrolling after a reverse until the mouse moves) ---- */
+* { overscroll-behavior:contain; }
+
 /* ---- header ---- */
 .app-header {
   display:flex; align-items:flex-start; justify-content:space-between;
