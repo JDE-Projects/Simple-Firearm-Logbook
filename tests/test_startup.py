@@ -402,6 +402,19 @@ def test_failure_message_is_attached_to_non_ready_result(tmp_path, message):
     assert result.message == message
 
 
+def test_failing_failure_message_falls_back_to_standard_message(tmp_path):
+    path = tmp_path / config.DB_FILENAME
+    path.write_bytes(config.PRO_ENCRYPTED_MAGIC + b"encrypted data")
+
+    def broken(outcome):
+        raise RuntimeError("edition message failed")
+
+    _, result = _prepare_with_options(path, failure_message=broken)
+
+    assert result.outcome == "encrypted"
+    assert result.message is None
+
+
 def test_empty_logbook_skips_launch_backup(tmp_path):
     path = tmp_path / config.DB_FILENAME
     open_db(str(path)).close()

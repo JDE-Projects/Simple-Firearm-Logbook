@@ -37,7 +37,12 @@ def _result(api, outcome: str, conn: sqlite3.Connection | None, detail: str,
             notices: tuple[str, ...] = (), restore_notice: str | None = None,
             failure_message: Callable[[str], str | None] | None = None) -> PreparedDatabase:
     api._log(f"Launch database {outcome}: {detail}")
-    message = failure_message(outcome) if outcome != "ready" and failure_message is not None else None
+    message = None
+    if outcome != "ready" and failure_message is not None:
+        try:
+            message = failure_message(outcome)
+        except Exception as error:  # noqa: BLE001 - the standard message box still shows.
+            api._log(f"Launch database edition message failed ({describe_error(error)})")
     return PreparedDatabase(outcome, conn, detail, notices, restore_notice, message)
 
 
