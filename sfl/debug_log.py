@@ -19,7 +19,7 @@ def describe_error(error):
     return type_name
 
 
-# Apps copy this file in as app/debug_log.py. It only writes and prunes log files;
+# Apps copy this file in as app/debug_log.py. DebugLog only writes and prunes log files;
 # the app keeps its own redaction function (passed in as `redact`) so secrets
 # never have to be taught to this shared file.
 class DebugLog:
