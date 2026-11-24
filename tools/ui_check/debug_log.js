@@ -21,6 +21,8 @@ export default async function debugLog(helpers) {
 
   await click(".dbg-toggle .dbg-track");
   await waitFor("document.getElementById('dbgToggle').checked", 3000);
-  const result = await evaluate("api().log('ui check C:\\\\Users\\\\' + 'TestUser\\\\record.pdf').then(() => 'ok')");
+  // A name off the allowed list is still logged, as "Page event: unknown",
+  // so the path below must never appear in the written log.
+  const result = await evaluate("api().log_page_event('ui check C:\\\\Users\\\\' + 'TestUser\\\\record.pdf').then(() => 'ok')");
   check("a debug line was written", result === "ok", String(result));
 }
