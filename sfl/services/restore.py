@@ -18,8 +18,8 @@ import zipfile
 import webview
 
 from sfl import config, paths
-from sfl.debug_log import describe_error
 from sfl import storage
+from sfl.debug_log import describe_error
 from sfl.services import zip_restore_recovery
 from sfl.utils import sha256_hex
 

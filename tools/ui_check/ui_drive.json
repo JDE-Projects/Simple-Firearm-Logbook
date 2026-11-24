@@ -93,6 +93,11 @@
       "fixture": "tools/ui_check/fixture_bottom_bar.py",
       "timeout_s": 120
     },
+    "theme-save-fail": {
+      "script": "tools/ui_check/theme_save_fail.js",
+      "fixture": "tools/ui_check/fixture_theme_save_fail.py",
+      "timeout_s": 120
+    },
     "missing-document": {
       "script": "tools/ui_check/missing_document.js",
       "fixture": "tools/ui_check/fixture_missing_document.py",

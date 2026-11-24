@@ -1173,9 +1173,16 @@ function applyTheme(theme){
   document.body.classList.toggle("light", theme === "light");
 }
 async function toggleTheme(){
-  const next = currentTheme === "light" ? "dark" : "light";
+  const prev = currentTheme;
+  const next = prev === "light" ? "dark" : "light";
   applyTheme(next);
-  if (api()) await api().save_theme(next);
+  if (!api()) return;
+  let r = null;
+  try { r = await api().save_theme(next); } catch (e) { r = null; }
+  if (!r || !r.ok){
+    applyTheme(prev);
+    showToast("Could not save the theme setting. The theme was not changed.");
+  }
 }
 
 /* ---------- money / date formatting ---------- */

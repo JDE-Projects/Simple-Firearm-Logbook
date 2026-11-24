@@ -150,6 +150,18 @@ def test_gives_up_quietly_when_window_never_found(desktop):
     assert fake.moves == []
 
 
+def test_next_show_places_window_after_slow_first_lookup(desktop):
+    # The first show event's 20 lookups all miss; the window turns up during
+    # the second show event, which must still place it.
+    fake = desktop(SMALL_WORK, handle_after=25)
+    lines = []
+    pw._restore_geometry(WIN, lines.append)
+    assert fake.moves == []
+    assert lines == ["Window not found for placement; retrying on next show"]
+    pw._restore_geometry(WIN, lines.append)
+    assert fake.moves == [(0, 0, 1024, 728)]
+
+
 @pytest.mark.parametrize("state", [{"minimized": True}, {"maximized": True}])
 def test_leaves_minimized_or_maximized_window_alone(desktop, state):
     fake = desktop(SMALL_WORK, saved={"x": 0, "y": 0, "width": 800, "height": 600}, **state)
