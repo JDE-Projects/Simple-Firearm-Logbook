@@ -7,6 +7,11 @@ manifest.json inventory. Covers the clean case (everything present, sizes
 and hashes correct, db copy openable), the missing-file case (recorded in
 the manifest, zip still produced), and the manifest's format/schema version
 fields.
+
+Also covers the extension step after each save dialog (full backup, single
+firearm HTML export, single firearm backup, collection export): the dialog
+cannot enforce a file type, so a chosen name without the expected extension
+gets it added, and a name that already ends in it is left alone.
 """
 
 import hashlib
@@ -15,8 +20,11 @@ import os
 import sqlite3
 import zipfile
 
+import pytest
+
 import simple_firearm_logbook as app
 from sfl import paths
+from sfl.services import backup, export
 from sfl.services.backup import _write_backup_zip
 
 
@@ -163,5 +171,55 @@ def test_manifest_format_and_schema_version(tmp_path, monkeypatch):
         assert manifest["format_version"] == 1
         assert manifest["schema_version"] == conn.execute("PRAGMA user_version").fetchone()[0]
         assert manifest["app_version"] == app.APP_VERSION
+    finally:
+        conn.close()
+
+
+_SAVE_ACTIONS = [
+    pytest.param(lambda conn, window, log, fid: backup.create_backup(conn, window, log), ".zip", id="full-backup"),
+    pytest.param(export.export_single_html, ".html", id="single-html"),
+    pytest.param(export.export_single_backup_zip, ".zip", id="single-backup"),
+    pytest.param(lambda conn, window, log, fid: export.export_full(conn, window, log), ".zip", id="collection-export"),
+]
+
+
+class _DialogReturning:
+    def __init__(self, path):
+        self.path = path
+
+    def create_file_dialog(self, *args, **kwargs):
+        return self.path
+
+
+@pytest.mark.parametrize("action, ext", _SAVE_ACTIONS)
+def test_save_adds_missing_extension(tmp_path, monkeypatch, action, ext):
+    conn, _, _ = _setup(tmp_path, monkeypatch)
+    try:
+        fid = conn.execute("SELECT id FROM firearms WHERE log_number='00001'").fetchone()["id"]
+        typed = tmp_path / "out" / "mysave"
+        os.makedirs(typed.parent)
+        _, log = _log_collector()
+        r = action(conn, _DialogReturning(str(typed)), log, fid)
+        assert r["ok"], r
+        assert r["path"] == str(typed) + ext
+        assert os.path.isfile(str(typed) + ext)
+        assert not typed.exists()
+    finally:
+        conn.close()
+
+
+@pytest.mark.parametrize("action, ext", _SAVE_ACTIONS)
+def test_save_keeps_existing_extension_in_any_case(tmp_path, monkeypatch, action, ext):
+    conn, _, _ = _setup(tmp_path, monkeypatch)
+    try:
+        fid = conn.execute("SELECT id FROM firearms WHERE log_number='00001'").fetchone()["id"]
+        typed = tmp_path / "out" / ("mysave" + ext.upper())
+        os.makedirs(typed.parent)
+        _, log = _log_collector()
+        r = action(conn, _DialogReturning(str(typed)), log, fid)
+        assert r["ok"], r
+        assert r["path"] == str(typed)
+        assert typed.is_file()
+        assert sorted(os.listdir(typed.parent)) == [typed.name]
     finally:
         conn.close()
