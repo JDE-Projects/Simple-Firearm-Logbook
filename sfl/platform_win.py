@@ -190,6 +190,13 @@ def _claim_restore() -> bool:
         return True
 
 
+def _release_restore() -> None:
+    """Hand the placement back so the next `shown` event tries again."""
+    global _restore_claimed
+    with _restore_lock:
+        _restore_claimed = False
+
+
 def _wait_for_window_handle(title, attempts=20, delay=0.1):
     """HWND of our window, retrying briefly: `shown` can fire just before the
     window is visible, when _own_window_handle cannot find it yet."""
@@ -252,6 +259,11 @@ def _restore_geometry(win, log=None) -> None:
         u = _win32()
         hwnd = _wait_for_window_handle(win.title)
         if not hwnd:
+            # A slow first paint can outlast the wait. Release the claim so
+            # the next show event places the window instead of never.
+            _release_restore()
+            if log:
+                log("Window not found for placement; retrying on next show")
             return
         SWP_NOZORDER, SWP_NOACTIVATE = 0x0004, 0x0010
         saved = _saved_rect_and_work_area(log)
