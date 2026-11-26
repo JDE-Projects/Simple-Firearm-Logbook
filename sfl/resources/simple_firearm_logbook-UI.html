@@ -191,6 +191,8 @@ table.fw-table tbody tr.disposed-row:hover { opacity:.85; }
 /* ---- detail view ---- */
 .detail-wrap { flex:1; min-height:0; overflow:auto; padding:0 24px 24px; }
 .detail-topbar { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 0 16px; flex-wrap:wrap; }
+.detail-navigation { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.detail-step-buttons { display:flex; align-items:center; gap:6px; }
 .back-btn { display:inline-flex; align-items:center; gap:6px; }
 .back-btn svg { width:14px; height:14px; }
 .detail-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
@@ -484,10 +486,22 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
   <div id="detailWrap" style="flex:1; min-height:0; display:none; flex-direction:column;">
     <div class="detail-wrap">
       <div class="detail-topbar">
-        <button type="button" class="btn back-btn" onclick="showListView()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-          Back to list
-        </button>
+        <div class="detail-navigation">
+          <button type="button" class="btn back-btn" onclick="showListView()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+            Back to list
+          </button>
+          <div class="detail-step-buttons" id="detailStepButtons" style="display:none;">
+            <button type="button" class="btn back-btn" onclick="stepDetailFirearm(-1)" title="Previous firearm">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+              Previous
+            </button>
+            <button type="button" class="btn back-btn" onclick="stepDetailFirearm(1)" title="Next firearm">
+              Next
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+          </div>
+        </div>
         <div class="detail-actions">
           <button type="button" class="btn" onclick="openEditFirearmModal()">Edit</button>
           <button type="button" class="btn" onclick="openDispositionModal()">Record disposition</button>
@@ -1160,6 +1174,7 @@ let sortDir = "asc";
 let currentFirearm = null;
 let currentPhotos = [];
 let currentAttachments = [];
+let detailStepLoading = false;
 let editingFirearmId = null;
 let pendingDeletePhotoId = null;
 let pendingDeleteAttachmentId = null;
@@ -1218,6 +1233,7 @@ async function loadFirearms(){
   if (!r || !r.ok) return;
   FIREARMS = r.firearms;
   renderTable();
+  if (currentFirearm && $("detailWrap").style.display !== "none") updateDetailStepButtons();
 }
 async function loadAutocomplete(){
   if (!api()) return;
@@ -1503,6 +1519,7 @@ async function saveFirearmNow(){
   }
   closeFirearmModal();
   if (editingFirearmId){
+    await loadFirearms();
     if (await openDetail(editingFirearmId)) {
       emitExtensionEvent("recordChanged", {id:editingFirearmId, action:"updated"});
     }
@@ -1541,8 +1558,30 @@ async function openDetail(id){
   return true;
 }
 
+function updateDetailStepButtons(){
+  const hasOtherVisibleFirearm = currentFirearm && visibleFirearms().some(f => f.id !== currentFirearm.id);
+  $("detailStepButtons").style.display = hasOtherVisibleFirearm ? "flex" : "none";
+}
+
+async function stepDetailFirearm(direction){
+  if (detailStepLoading || !currentFirearm || document.querySelector(".modal-scrim.open") || $("lightboxScrim").classList.contains("open")) return;
+  const rows = visibleFirearms();
+  if (!rows.some(f => f.id !== currentFirearm.id)) return;
+  const currentIndex = rows.findIndex(f => f.id === currentFirearm.id);
+  const targetIndex = currentIndex === -1
+    ? (direction < 0 ? rows.length - 1 : 0)
+    : (currentIndex + direction + rows.length) % rows.length;
+  detailStepLoading = true;
+  try {
+    if (await openDetail(rows[targetIndex].id)) $("detailWrap").querySelector(".detail-wrap").scrollTop = 0;
+  } finally {
+    detailStepLoading = false;
+  }
+}
+
 function renderDetail(){
   const f = currentFirearm;
+  updateDetailStepButtons();
   $("detailTitle").textContent = `${f.make} ${f.model}`;
   $("detailLogNum").textContent = "Log #" + f.log_number;
 
@@ -1637,6 +1676,7 @@ async function saveDispositionNow(){
   }
   closeDispositionModal();
   const firearmId = currentFirearm.id;
+  await loadFirearms();
   if (await openDetail(firearmId)) {
     emitExtensionEvent("recordChanged", {id:firearmId, action:"disposition"});
   }
@@ -2012,6 +2052,7 @@ async function confirmMarkOwnedNow(){
   }
   closeMarkOwnedModal();
   const firearmId = currentFirearm.id;
+  await loadFirearms();
   if (await openDetail(firearmId)) {
     emitExtensionEvent("recordChanged", {id:firearmId, action:"disposition"});
   }
