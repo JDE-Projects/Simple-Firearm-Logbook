@@ -13,6 +13,9 @@ If you enjoyed this project and would like to buy me a coffee, check out my [Ko-
 ## Highlights
 - Sequential 5-digit log numbers, assigned automatically to each firearm.
 - Photo attachments for each firearm: drag image files onto the add-photo window or browse for them, with a starred primary photo used in lists and exports.
+- An enlarged photo view with Previous and Next (or the arrow keys), an actual-size view, and a button to save a copy of any photo to your computer.
+- Previous and Next buttons on each firearm's page to move through your collection.
+- A count of the firearms you own, shown at the top of every screen.
 - Document attachments for each firearm (receipts, permits, paperwork), with a count shown in the list.
 - NFA and trust tracking: flag NFA items (form type and stamp date) and firearms held in a trust, each shown as a badge in the list.
 - Search the list by make, model, type, status, and more, and filter it by group (General, NFA, Trust; tick several to see any of them) or show disposed firearms.
