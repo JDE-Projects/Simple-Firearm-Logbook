@@ -269,9 +269,12 @@ table.fw-table tbody tr.disposed-row:hover { opacity:.85; }
 }
 .lightbox-scrim.open { display:flex; }
 .lightbox-scrim [hidden] { display:none !important; }
-.lightbox-stage { display:flex; min-height:0; max-width:100%; border-radius:8px; }
-.lightbox-stage img { display:block; margin:auto; max-width:100%; max-height:calc(100vh - 64px - 18px - 12px - 28px); border-radius:8px; box-shadow:0 20px 60px rgba(0,0,0,.5); }
-.lightbox-scrim.zoomed .lightbox-stage { flex:1 1 auto; width:100%; overflow:auto; cursor:grab; }
+/* The stage takes all the room between the top buttons and the controls, so
+   the controls stay put whatever the photo's size. The photo is centered in
+   it and only ever shrunk to fit, never enlarged. */
+.lightbox-stage { display:flex; flex:1 1 auto; width:100%; min-height:0; border-radius:8px; }
+.lightbox-stage img { display:block; margin:auto; max-width:100%; max-height:100%; border-radius:8px; box-shadow:0 20px 60px rgba(0,0,0,.5); }
+.lightbox-scrim.zoomed .lightbox-stage { overflow:auto; cursor:grab; }
 .lightbox-scrim.zoomed .lightbox-stage.dragging { cursor:grabbing; }
 .lightbox-scrim.zoomed .lightbox-stage img { flex:0 0 auto; max-width:none; max-height:none; }
 .lightbox-error { margin:auto; max-width:100%; color:#fff; font-size:13px; text-align:center; }
@@ -589,13 +592,13 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
 
   <!-- lightbox -->
   <div class="lightbox-scrim" id="lightboxScrim" onclick="closeLightbox(event)">
-    <button type="button" class="lightbox-save" id="lightboxSave" title="Save a copy of this photo" onclick="event.stopPropagation(); savePhotoCopy(currentPhotos[lightboxPhotoIndex].id)">
+    <button type="button" class="lightbox-save" id="lightboxSave" title="Save a copy of this photo" onclick="event.stopPropagation(); if (lightboxShownIndex !== -1) savePhotoCopy(currentPhotos[lightboxShownIndex].id)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
     </button>
     <button class="lightbox-close" onclick="closeLightbox(event)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg>
     </button>
-    <div class="lightbox-stage" id="lightboxStage" onclick="event.stopPropagation()">
+    <div class="lightbox-stage" id="lightboxStage" onclick="lightboxStageClick(event)">
       <img id="lightboxImg" src="" alt="Photo">
       <div class="lightbox-error" id="lightboxError" hidden></div>
     </div>
@@ -1796,7 +1799,8 @@ async function loadPhotoThumb(p){
 
 const lightboxZoomIn = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/><path d="M11 8v6M8 11h6"/></svg>Actual size';
 const lightboxZoomOut = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/><path d="M8 11h6"/></svg>Fit';
-let lightboxPhotoIndex = -1;
+let lightboxPhotoIndex = -1; // the photo asked for; stepping counts from here
+let lightboxShownIndex = -1; // the photo (or its error) on screen; the label and Save follow it
 let lightboxRequest = 0;
 let lightboxDrag = null;
 let lightboxDragEnded = false; // a drag released over the backdrop must not count as a click that closes the view
@@ -1834,34 +1838,49 @@ function setLightboxZoom(zoomed){
     });
   }
 }
-function updateLightboxControls(){
+function updateLightboxControls(index){
   const multiple = currentPhotos.length > 1;
   $("lightboxPrevious").hidden = !multiple;
   $("lightboxNext").hidden = !multiple;
   $("lightboxCount").hidden = !multiple;
-  $("lightboxCount").textContent = (lightboxPhotoIndex + 1) + " of " + currentPhotos.length;
+  $("lightboxCount").textContent = (index + 1) + " of " + currentPhotos.length;
 }
+// The photo on screen stays until the next one has loaded and decoded, then
+// they swap in one step, so the view never sits empty between photos.
 async function showLightboxPhoto(index){
   if (!currentPhotos.length) return;
   lightboxPhotoIndex = (index + currentPhotos.length) % currentPhotos.length;
   const request = ++lightboxRequest;
+  const stale = () => request !== lightboxRequest || !$("lightboxScrim").classList.contains("open");
   const img = $("lightboxImg");
   const error = $("lightboxError");
   setLightboxZoom(false);
-  img.src = "";
-  img.hidden = true;
-  error.hidden = true;
-  error.textContent = "";
-  updateLightboxControls();
+  if (lightboxShownIndex === -1) updateLightboxControls(lightboxPhotoIndex);
   let result = null;
   try { result = await api().get_photo_data(currentPhotos[lightboxPhotoIndex].filename); }
   catch (err) { result = {ok:false, error:"Couldn't load this photo."}; }
-  if (request !== lightboxRequest || !$("lightboxScrim").classList.contains("open")) return;
+  if (stale()) return;
+  if (result && result.ok){
+    try {
+      const next = new Image();
+      next.src = result.data_uri;
+      await next.decode();
+    } catch (err) {
+      result = {ok:false, error:"Couldn't show this photo. The file may be damaged."};
+    }
+    if (stale()) return;
+  }
+  lightboxShownIndex = lightboxPhotoIndex;
+  updateLightboxControls(lightboxShownIndex);
   if (!result || !result.ok){
+    img.hidden = true;
+    img.src = "";
     error.textContent = (result && result.error) || "Couldn't load this photo.";
     error.hidden = false;
     return;
   }
+  error.hidden = true;
+  error.textContent = "";
   img.src = result.data_uri;
   img.hidden = false;
 }
@@ -1870,6 +1889,12 @@ function openLightbox(photoId){
   if (index === -1) return;
   $("lightboxScrim").classList.add("open");
   showLightboxPhoto(index);
+}
+// A click on the empty space around a fit-size photo closes the view, as the
+// backdrop does; a click on the photo, or anywhere at actual size, does not.
+function lightboxStageClick(e){
+  e.stopPropagation();
+  if (e.target === $("lightboxStage") && !$("lightboxScrim").classList.contains("zoomed") && !lightboxDragEnded) closeLightbox();
 }
 function closeLightbox(e){
   if (e && e.currentTarget === $("lightboxScrim") && (e.target !== $("lightboxScrim") || lightboxDragEnded)) return;
@@ -1883,6 +1908,7 @@ function closeLightbox(e){
   $("lightboxError").textContent = "";
   $("lightboxError").hidden = true;
   lightboxPhotoIndex = -1;
+  lightboxShownIndex = -1;
 }
 $("lightboxImg").addEventListener("load", updateLightboxZoomButton);
 $("lightboxPrevious").onclick = () => showLightboxPhoto(lightboxPhotoIndex - 1);
@@ -1910,6 +1936,31 @@ window.addEventListener("mouseup", () => {
   $("lightboxStage").classList.remove("dragging");
 });
 window.addEventListener("resize", updateLightboxZoomButton);
+// Photo view keys: Escape returns from actual size to fit, or closes the view
+// at fit size; at fit size Left / Right step like the buttons; at actual size
+// the four arrows scroll the photo instead.
+const LIGHTBOX_SCROLL_STEP = 80;
+const lightboxScrollKeys = {ArrowLeft:[-1, 0], ArrowRight:[1, 0], ArrowUp:[0, -1], ArrowDown:[0, 1]};
+document.addEventListener("keydown", e => {
+  if (!$("lightboxScrim").classList.contains("open") || document.querySelector(".modal-scrim.open")) return;
+  if (e.ctrlKey || e.altKey || e.metaKey) return;
+  if (e.key === "Escape"){
+    e.preventDefault();
+    if ($("lightboxScrim").classList.contains("zoomed")) setLightboxZoom(false);
+    else closeLightbox();
+    return;
+  }
+  if (!(e.key in lightboxScrollKeys)) return;
+  e.preventDefault();
+  if ($("lightboxScrim").classList.contains("zoomed")){
+    const [x, y] = lightboxScrollKeys[e.key];
+    $("lightboxStage").scrollBy(x * LIGHTBOX_SCROLL_STEP, y * LIGHTBOX_SCROLL_STEP);
+    return;
+  }
+  if (currentPhotos.length < 2) return;
+  if (e.key === "ArrowLeft") showLightboxPhoto(lightboxPhotoIndex - 1);
+  else if (e.key === "ArrowRight") showLightboxPhoto(lightboxPhotoIndex + 1);
+});
 
 async function addPhotos(){
   if (!api() || !currentFirearm) return;

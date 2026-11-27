@@ -1,12 +1,15 @@
 // ui_drive photo-step scenario for Simple Firearm Logbook. Opens fixture
 // photos in the real lightbox and verifies stepping, wrapping, missing-photo
-// handling, zoom, control visibility, and the viewport layout.
+// handling, zoom, control visibility and placement, the viewport layout,
+// clicks that close the view, the old photo staying on screen while the next
+// one loads, and the arrow and Escape keys.
 //
-// Does not cover: visual styling beyond overlap and viewport bounds, keyboard
-// navigation, drag scrolling at actual size, or every supported image format.
+// Does not cover: visual styling beyond overlap and viewport bounds, keys
+// pressed while a dialog is open over the photo view, held-down key repeat,
+// drag scrolling at actual size, or every supported image format.
 
 export default async function photoStep(helpers) {
-  const { click, evaluate, waitFor, check, screenshot, fixture } = helpers;
+  const { click, press, evaluate, waitFor, check, screenshot, fixture } = helpers;
   const image = "document.getElementById('lightboxImg')";
   const displayed = id => `getComputedStyle(document.getElementById('${id}')).display !== 'none'`;
   const count = () => evaluate("document.getElementById('lightboxCount').textContent");
@@ -99,6 +102,16 @@ export default async function photoStep(helpers) {
   await waitFor(photoReady(fixture.widths[0]), 10000);
   const smallZoom = await evaluate(`JSON.stringify({displayed:${displayed('lightboxZoom')}, width:${image}.naturalWidth})`);
   check("the Actual size button is hidden for small photo 1", !JSON.parse(smallZoom).displayed, smallZoom);
+  const placement = `JSON.stringify((() => {
+    const box = selector => { const r = document.querySelector(selector).getBoundingClientRect(); return {left:r.left, top:r.top, right:r.right, bottom:r.bottom, width:r.width}; };
+    return {photo:box('#lightboxImg'), stage:box('#lightboxStage'), controls:box('.lightbox-controls')};
+  })())`;
+  const smallPlacementText = await evaluate(placement);
+  const smallPlacement = JSON.parse(smallPlacementText);
+  const centered = p => Math.abs((p.photo.left + p.photo.right) - (p.stage.left + p.stage.right)) <= 2
+    && Math.abs((p.photo.top + p.photo.bottom) - (p.stage.top + p.stage.bottom)) <= 2;
+  check("small photo 1 shows at its own size, centered in the photo area",
+    Math.abs(smallPlacement.photo.width - fixture.widths[0]) <= 1 && centered(smallPlacement), smallPlacementText);
 
   // 9. The large photo's fit layout stays within the window without overlap.
   await click("#lightboxNext");
@@ -117,6 +130,11 @@ export default async function photoStep(helpers) {
   const layout = JSON.parse(fitLayout);
   check("large photo fit layout shows Actual size without overlap and stays inside the window",
     layout.zoomDisplayed && !layout.overlaps.some(Boolean) && layout.inside.every(Boolean), fitLayout);
+  const largePlacementText = await evaluate(placement);
+  const largePlacement = JSON.parse(largePlacementText);
+  const sameSpot = ["left", "top", "right", "bottom"].every(side => Math.abs(largePlacement.controls[side] - smallPlacement.controls[side]) <= 1);
+  check("the controls sit in the same place for small photo 1 and large photo 3, and photo 3 is centered",
+    sameSpot && centered(largePlacement), JSON.stringify({small:smallPlacement.controls, large:largePlacement.controls, photo:largePlacement.photo, stage:largePlacement.stage}));
 
   // 10. Actual size uses image pixels adjusted for the device pixel ratio.
   await click("#lightboxZoom");
@@ -139,19 +157,121 @@ export default async function photoStep(helpers) {
   const photoClickOpen = await evaluate(lightboxOpen);
   check("clicking the fit-mode photo leaves the lightbox open", photoClickOpen, String(photoClickOpen));
 
-  // 13. A direct backdrop click closes the lightbox.
+  // 13. A click on the empty space around a fit-size photo closes the view.
+  await evaluate("document.getElementById('lightboxStage').dispatchEvent(new MouseEvent('click', {bubbles:true}))");
+  await waitFor(`!(${lightboxOpen})`, 5000);
+  const stageClosed = !(await evaluate(lightboxOpen));
+  check("a click on the empty space around the photo closes the lightbox", stageClosed, String(stageClosed));
+  await showPhoto(1);
+
+  // 14. A direct backdrop click closes the lightbox.
   await evaluate("document.getElementById('lightboxScrim').dispatchEvent(new MouseEvent('click', {bubbles:true}))");
   await waitFor(`!(${lightboxOpen})`, 5000);
   const backdropClosed = !(await evaluate(lightboxOpen));
   check("a click targeted at the scrim closes the lightbox", backdropClosed, String(backdropClosed));
 
-  // 14. One photo hides all stepping controls and the count.
+  // 15. Right and Left arrows step at fit size.
+  await showPhoto(1);
+  await press("ArrowRight");
+  await waitFor(photoReady(fixture.widths[2]), 10000);
+  const keyNext = JSON.stringify({count: await count(), width: await width()});
+  check("Right arrow at fit size shows photo 3", JSON.parse(keyNext).count === "3 of 5" && JSON.parse(keyNext).width === fixture.widths[2], keyNext);
+  await press("ArrowLeft");
+  await waitFor(photoReady(fixture.widths[1]), 10000);
+  const keyPrevious = JSON.stringify({count: await count(), width: await width()});
+  check("Left arrow at fit size shows photo 2", JSON.parse(keyPrevious).count === "2 of 5" && JSON.parse(keyPrevious).width === fixture.widths[1], keyPrevious);
+
+  // 16. The arrows wrap at both ends like the buttons.
+  await press("ArrowLeft");
+  await waitFor(photoReady(fixture.widths[0]), 10000);
+  await press("ArrowLeft");
+  await waitFor(photoReady(fixture.widths[4]), 10000);
+  const keyWrapBack = JSON.stringify({count: await count(), width: await width()});
+  check("Left arrow from photo 1 wraps to photo 5", JSON.parse(keyWrapBack).count === "5 of 5" && JSON.parse(keyWrapBack).width === fixture.widths[4], keyWrapBack);
+  await press("ArrowRight");
+  await waitFor(photoReady(fixture.widths[0]), 10000);
+  const keyWrapForward = JSON.stringify({count: await count(), width: await width()});
+  check("Right arrow from photo 5 wraps to photo 1", JSON.parse(keyWrapForward).count === "1 of 5" && JSON.parse(keyWrapForward).width === fixture.widths[0], keyWrapForward);
+
+  // 17. While the next photo loads, the current photo and its label stay on
+  // screen. A stand-in holds each photo request for 1.5 seconds.
+  await evaluate(`(() => {
+    const realGet = window.pywebview.api.get_photo_data;
+    window.photoStepRealGet = realGet;
+    window.pywebview.api.get_photo_data = (...args) =>
+      new Promise(resolve => setTimeout(() => resolve(realGet(...args)), 1500));
+    return true;
+  })()`);
+  await press("ArrowRight");
+  const whileLoadingText = await evaluate(`JSON.stringify({displayed:${displayed('lightboxImg')}, width:${image}.naturalWidth, count:document.getElementById('lightboxCount').textContent})`);
+  const whileLoading = JSON.parse(whileLoadingText);
+  check("while photo 2 loads, photo 1 and its 1 of 5 label stay on screen",
+    whileLoading.displayed && whileLoading.width === fixture.widths[0] && whileLoading.count === "1 of 5", whileLoadingText);
+  await waitFor(photoReady(fixture.widths[1]), 10000);
+  const swappedText = JSON.stringify({count: await count(), width: await width()});
+  check("once loaded, photo 2 and its 2 of 5 label replace photo 1 together",
+    JSON.parse(swappedText).count === "2 of 5" && JSON.parse(swappedText).width === fixture.widths[1], swappedText);
+  await evaluate("(window.pywebview.api.get_photo_data = window.photoStepRealGet, true)");
+
+  // 18. At actual size the arrows scroll the photo instead of stepping. The
+  // view starts centered, so a nonzero scroll position shows the centering
+  // has run and the photo has room to scroll on at least one axis.
+  await press("ArrowRight");
+  await waitFor(photoReady(fixture.widths[2]), 10000);
+  await waitFor(displayed('lightboxZoom'), 10000);
+  await click("#lightboxZoom");
+  const stage = "document.getElementById('lightboxStage')";
+  await waitFor(`document.getElementById('lightboxScrim').classList.contains('zoomed') && (${stage}.scrollLeft > 0 || ${stage}.scrollTop > 0)`, 5000);
+  await evaluate(`${stage}.scrollTo(0, 0)`);
+  const scrollState = () => evaluate(`JSON.stringify({left:${stage}.scrollLeft, top:${stage}.scrollTop,
+    maxLeft:${stage}.scrollWidth - ${stage}.clientWidth, maxTop:${stage}.scrollHeight - ${stage}.clientHeight,
+    zoomed:document.getElementById('lightboxScrim').classList.contains('zoomed'), count:document.getElementById('lightboxCount').textContent, width:${image}.naturalWidth})`);
+  await press("ArrowRight");
+  await press("ArrowDown");
+  const scrolledText = await scrollState();
+  const scrolled = JSON.parse(scrolledText);
+  const near = (a, b) => Math.abs(a - b) <= 1;
+  check("Right and Down arrows at actual size scroll the photo by up to 80 pixels without stepping",
+    scrolled.zoomed && scrolled.count === "3 of 5" && scrolled.width === fixture.widths[2]
+      && near(scrolled.left, Math.min(80, scrolled.maxLeft)) && near(scrolled.top, Math.min(80, scrolled.maxTop)), scrolledText);
+  await press("ArrowLeft");
+  await press("ArrowUp");
+  const returnedText = await scrollState();
+  const returned = JSON.parse(returnedText);
+  check("Left and Up arrows at actual size scroll back without stepping",
+    returned.zoomed && returned.count === "3 of 5" && returned.left === 0 && returned.top === 0, returnedText);
+
+  // 19. Escape at actual size returns to fit; a second Escape closes.
+  await press("Escape");
+  await waitFor("!document.getElementById('lightboxScrim').classList.contains('zoomed')", 5000);
+  const escapeZoomed = await evaluate(`JSON.stringify({open:${lightboxOpen}, zoomed:document.getElementById('lightboxScrim').classList.contains('zoomed'), count:document.getElementById('lightboxCount').textContent})`);
+  check("Escape at actual size returns to fit and keeps photo 3 open",
+    JSON.parse(escapeZoomed).open && !JSON.parse(escapeZoomed).zoomed && JSON.parse(escapeZoomed).count === "3 of 5", escapeZoomed);
+  await press("Escape");
+  await waitFor(`!(${lightboxOpen})`, 5000);
+  const escapeClosed = !(await evaluate(lightboxOpen));
+  check("a second Escape at fit size closes the photo view", escapeClosed, String(escapeClosed));
+
+  // 20. One photo hides all stepping controls and the count.
   await openFirearm(fixture.firearm_b_id, 1);
   await click(".photo-thumb img");
   await waitFor(photoReady(640), 10000);
   const onePhoto = await evaluate(`JSON.stringify({previous:${displayed('lightboxPrevious')}, next:${displayed('lightboxNext')}, count:${displayed('lightboxCount')}, width:${image}.naturalWidth})`);
   const solo = JSON.parse(onePhoto);
   check("one-photo lightbox hides Previous, Next, and the count", !solo.previous && !solo.next && !solo.count, onePhoto);
-  await click(".lightbox-close");
+
+  // 21. With one photo the arrows do not reload the photo.
+  const requestBefore = await evaluate("lightboxRequest");
+  await press("ArrowRight");
+  await press("ArrowLeft");
+  const soloKeys = await evaluate(`JSON.stringify({request:lightboxRequest, open:${lightboxOpen}, width:${image}.naturalWidth})`);
+  const soloAfter = JSON.parse(soloKeys);
+  check("arrows with one photo leave the view open and request no photo",
+    soloAfter.request === requestBefore && soloAfter.open && soloAfter.width === 640, JSON.stringify({requestBefore, ...soloAfter}));
+
+  // 22. Escape closes the view at fit size.
+  await press("Escape");
   await waitFor(`!(${lightboxOpen})`, 5000);
+  const escapeFit = !(await evaluate(lightboxOpen));
+  check("Escape at fit size closes the photo view", escapeFit, String(escapeFit));
 }
