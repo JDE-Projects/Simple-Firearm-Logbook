@@ -359,3 +359,43 @@ def get_photo_data(log, filename):
     except Exception as e:
         log(f"get_photo_data failed ({describe_error(e)})")
         return {"ok": False, "error": "Couldn't load that photo."}
+
+
+def save_photo_copy(conn, window, log, photo_id):
+    """Copy a stored photo to a location selected by the user."""
+    try:
+        row = conn.execute(
+            "SELECT photos.*, firearms.log_number FROM photos "
+            "JOIN firearms ON firearms.id=photos.firearm_id WHERE photos.id=?",
+            (photo_id,),
+        ).fetchone()
+        if row is None:
+            return {"ok": False, "error": "That photo no longer exists."}
+        full = paths._safe_photo_path(row["filename"])
+        if full is None or not os.path.isfile(full):
+            return {"ok": False, "missing": True, "error": "That photo file is missing."}
+        photos = _get_photos(conn, row["firearm_id"])
+        position = next(i for i, photo in enumerate(photos, start=1) if photo["id"] == photo_id)
+        ext = os.path.splitext(row["filename"])[1]
+        default_name = paths.sanitize_filename(f"SFL-{row['log_number']}_{position:02d}{ext}")
+        dialog_kwargs = {
+            "save_filename": default_name,
+            "file_types": ("JPEG Images (*.jpg;*.jpeg)",),
+        }
+        directory = paths.downloads_dir()
+        if directory:
+            dialog_kwargs["directory"] = directory
+        result = window.create_file_dialog(webview.FileDialog.SAVE, **dialog_kwargs)
+        if not result:
+            return {"ok": True, "cancelled": True}
+        path = result[0] if isinstance(result, (list, tuple)) else result
+        if not path:
+            return {"ok": True, "cancelled": True}
+        if ext and not os.path.splitext(path)[1]:
+            path += ext
+        storage.current().export_file(full, path)
+        log(f"Saved a copy of photo {photo_id}")
+        return {"ok": True, "path": path}
+    except Exception as e:
+        log(f"save_photo_copy failed ({describe_error(e)})")
+        return {"ok": False, "error": "Couldn't save a copy of the photo."}
