@@ -104,8 +104,13 @@ export default async function smoke(helpers) {
   await type("#ff-model", "10/22");
   await click("#firearmModalScrim .btn.primary");
   await waitFor("!document.getElementById('firearmModalScrim').classList.contains('open')", 10000);
+  // The detail page can still show the previously open firearm for a moment
+  // after the dialog closes, so wait for the new title before checking it.
+  const newTitleShown = await waitFor(
+    "(t => t.includes('Ruger') && t.includes('10/22'))(document.getElementById('detailTitle').textContent)", 5000)
+    .then(() => true).catch(() => false);
   const newTitle = await evaluate("document.getElementById('detailTitle').textContent");
-  check("the new firearm saves and opens", newTitle.includes("Ruger") && newTitle.includes("10/22"), newTitle);
+  check("the new firearm saves and opens", newTitleShown, newTitle);
   const listAfter = await evaluate("api().list_firearms()");
   const count = r => (r && (r.firearms || r.items || [])).length;
   check("one firearm was added", count(listAfter) === count(listBefore) + 1,
