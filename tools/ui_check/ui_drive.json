@@ -108,6 +108,11 @@
       "fixture": "tools/ui_check/fixture_theme_save_fail.py",
       "timeout_s": 120
     },
+    "focus-ring": {
+      "script": "tools/ui_check/focus_ring.js",
+      "fixture": "tools/ui_check/fixture_focus_ring.py",
+      "timeout_s": 120
+    },
     "missing-document": {
       "script": "tools/ui_check/missing_document.js",
       "fixture": "tools/ui_check/fixture_missing_document.py",
