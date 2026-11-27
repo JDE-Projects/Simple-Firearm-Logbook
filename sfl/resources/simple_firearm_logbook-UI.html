@@ -431,13 +431,14 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
 /* One teal ring for whatever the keyboard lands on. The gap left by the
    offset keeps the ring readable against teal fills. Text fields keep their
    teal border instead. Toggles hide their real checkbox, so the ring goes on
-   the visible switch. A scrolling area draws it inside its own edge. */
+   the visible switch. The log view is kept out of the Tab order and never
+   shows the ring: its column-header row would cover the top edge. */
 :focus-visible,
 input[type="checkbox"]:focus-visible,
 input[type="radio"]:focus-visible,
 .show-disposed-toggle input:focus-visible + .sd-track,
 .dbg-toggle input:focus-visible + .dbg-track { outline:2px solid var(--accent); outline-offset:2px; }
-.table-wrap:focus-visible { outline-offset:-2px; }
+.table-wrap:focus-visible { outline:none; }
 </style>
 </head>
 <body>
@@ -513,7 +514,7 @@ input[type="radio"]:focus-visible,
       </div>
     </div>
 
-    <div class="table-wrap">
+    <div class="table-wrap" tabindex="-1">
       <table class="fw-table" id="fwTable" style="display:none;">
         <thead>
           <tr>
