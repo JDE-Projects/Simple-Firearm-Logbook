@@ -62,6 +62,10 @@ body.light {
 
 /* ---- keep the wheel inside each scroll area at its edges (some mice otherwise stop scrolling after a reverse until the mouse moves) ---- */
 * { overscroll-behavior:contain; }
+/* Keep the button itself under the cursor across an icon button, so its
+   tooltip stays up instead of hiding and re-showing as the cursor crosses
+   the icon's lines. Clicks still land on the button. */
+button svg { pointer-events:none; }
 
 /* ---- header ---- */
 /* equal side columns keep the owned counter on the window's true center */

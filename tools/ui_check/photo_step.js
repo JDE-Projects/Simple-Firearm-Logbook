@@ -222,7 +222,11 @@ export default async function photoStep(helpers) {
   await click("#lightboxZoom");
   const stage = "document.getElementById('lightboxStage')";
   await waitFor(`document.getElementById('lightboxScrim').classList.contains('zoomed') && (${stage}.scrollLeft > 0 || ${stage}.scrollTop > 0)`, 5000);
+  // The centering runs on the next animation frame. Let two frames pass so it
+  // cannot land after the reset below and undo it.
+  await evaluate("new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => r(true))))");
   await evaluate(`${stage}.scrollTo(0, 0)`);
+  await waitFor(`${stage}.scrollLeft === 0 && ${stage}.scrollTop === 0`, 5000);
   const scrollState = () => evaluate(`JSON.stringify({left:${stage}.scrollLeft, top:${stage}.scrollTop,
     maxLeft:${stage}.scrollWidth - ${stage}.clientWidth, maxTop:${stage}.scrollHeight - ${stage}.clientHeight,
     zoomed:document.getElementById('lightboxScrim').classList.contains('zoomed'), count:document.getElementById('lightboxCount').textContent, width:${image}.naturalWidth})`);
