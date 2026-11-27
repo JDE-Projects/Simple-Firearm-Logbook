@@ -64,10 +64,15 @@ body.light {
 * { overscroll-behavior:contain; }
 
 /* ---- header ---- */
+/* equal side columns keep the owned counter on the window's true center */
 .app-header {
-  display:flex; align-items:flex-start; justify-content:space-between;
+  display:grid; grid-template-columns:1fr auto 1fr; align-items:start;
   padding:18px 24px 12px; gap:18px; flex:0 0 auto;
 }
+.owned-counter { align-self:center; text-align:center; line-height:1; user-select:none; }
+.owned-counter:empty { display:none; }
+.owned-counter .oc-num { font-family:"JetBrains Mono", monospace; font-size:17px; font-weight:700; color:var(--accent); }
+.owned-counter .oc-label { font-size:10px; font-weight:600; letter-spacing:.6px; text-transform:uppercase; color:var(--text-faint); margin-top:5px; }
 .app-header .brand { display:flex; align-items:center; gap:13px; flex:0 0 auto; min-width:0; }
 .app-header .app-glyph {
   width:40px; height:40px; border-radius:11px;
@@ -77,7 +82,7 @@ body.light {
 .app-header .byline { font-family:"JetBrains Mono", monospace; font-size:11.5px; color:var(--text-dim); margin-top:3px; }
 .app-header .byline a { color:var(--accent); cursor:pointer; text-decoration:none; }
 .app-header .byline a:hover { text-decoration:underline; }
-.app-header .head-right { display:flex; align-items:center; gap:12px; flex:0 0 auto; }
+.app-header .head-right { display:flex; align-items:center; gap:12px; flex:0 0 auto; justify-self:end; }
 .theme-btn {
   background:transparent; border:1px solid var(--border-2); border-radius:var(--radius-sm);
   width:36px; height:36px; display:flex; align-items:center; justify-content:center;
@@ -421,6 +426,7 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
         <div class="byline">by <a class="gh-link" onclick="openUrl('https://jde-projects.com')">JDE-Projects</a></div>
       </div>
     </div>
+    <div class="owned-counter" id="ownedCounter"></div>
     <div class="head-right">
       <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle theme">
         <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
@@ -1269,6 +1275,7 @@ async function loadFirearms(){
   const r = await api().list_firearms();
   if (!r || !r.ok) return;
   FIREARMS = r.firearms;
+  renderOwnedCounter();
   renderTable();
   if (currentFirearm && $("detailWrap").style.display !== "none") updateDetailStepButtons();
 }
@@ -1279,6 +1286,14 @@ async function loadAutocomplete(){
   AUTOCOMPLETE = r;
   $("makeList").innerHTML = r.makes.map(m => `<option value="${esc(m)}">`).join("");
   $("caliberList").innerHTML = r.calibers.map(c => `<option value="${esc(c)}">`).join("");
+}
+
+/* Total owned (not disposed) firearms. Ignores search, filters, and the
+   "Show disposed firearms" toggle on purpose: it always shows the whole count. */
+function renderOwnedCounter(){
+  const n = FIREARMS.filter(f => f.disposition_status === "Owned").length;
+  $("ownedCounter").innerHTML =
+    `<div class="oc-num">${n}</div><div class="oc-label">${n === 1 ? "Firearm owned" : "Firearms owned"}</div>`;
 }
 
 function statusClass(status){
