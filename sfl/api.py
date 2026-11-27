@@ -244,6 +244,9 @@ class Api:
         out of a PyInstaller temp folder."""
         return photos_service.get_photo_data(self._log, filename)
 
+    def save_photo_copy(self, photo_id):
+        return photos_service.save_photo_copy(self._conn, self._window, self._log, photo_id)
+
     def _photo_with_data(self, p: dict) -> dict:
         return photos_service._photo_with_data(p)
 

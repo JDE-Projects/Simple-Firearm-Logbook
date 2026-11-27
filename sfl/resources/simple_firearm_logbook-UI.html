@@ -227,13 +227,14 @@ table.fw-table tbody tr.disposed-row:hover { opacity:.85; }
 .photo-thumb img { width:100%; height:100%; object-fit:cover; display:block; cursor:pointer; }
 .photo-thumb .ph-loading { display:flex; align-items:center; justify-content:center; height:100%; color:var(--text-faint); font-size:11px; }
 .photo-actions { position:absolute; top:5px; right:5px; display:flex; gap:4px; }
-.photo-star, .photo-del {
+.photo-star, .photo-save, .photo-del {
   width:22px; height:22px; border-radius:6px; border:none; cursor:pointer; display:flex;
   align-items:center; justify-content:center; background:rgba(10,14,20,.55); color:#fff; transition:.15s;
 }
-.photo-star svg, .photo-del svg { width:12px; height:12px; }
+.photo-star svg, .photo-save svg, .photo-del svg { width:12px; height:12px; }
 .photo-star.active { color:var(--amber); }
 .photo-star:hover { color:var(--amber); }
+.photo-save:hover { color:var(--accent); }
 .photo-del:hover { color:var(--red); }
 .photo-badge {
   position:absolute; bottom:5px; left:5px; font-size:10px; font-weight:600; letter-spacing:.3px;
@@ -288,8 +289,12 @@ table.fw-table tbody tr.disposed-row:hover { opacity:.85; }
 .lightbox-zoom svg { width:13px; height:13px; }
 .lightbox-close { position:absolute; top:18px; right:22px; width:36px; height:36px; border-radius:8px; border:1px solid rgba(255,255,255,.3);
   background:rgba(255,255,255,.08); color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:.15s; }
+.lightbox-save { position:absolute; top:18px; right:66px; width:36px; height:36px; border-radius:8px; border:1px solid rgba(255,255,255,.3);
+  background:rgba(255,255,255,.08); color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:.15s; }
 .lightbox-close:hover { border-color:var(--accent); transform:translateY(-1px); }
+.lightbox-save:hover { border-color:var(--accent); transform:translateY(-1px); }
 .lightbox-close svg { width:16px; height:16px; }
+.lightbox-save svg { width:16px; height:16px; }
 
 /* ---- forms ---- */
 .fld { display:flex; flex-direction:column; gap:5px; margin-bottom:14px; }
@@ -584,6 +589,9 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
 
   <!-- lightbox -->
   <div class="lightbox-scrim" id="lightboxScrim" onclick="closeLightbox(event)">
+    <button type="button" class="lightbox-save" id="lightboxSave" title="Save a copy of this photo" onclick="event.stopPropagation(); savePhotoCopy(currentPhotos[lightboxPhotoIndex].id)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+    </button>
     <button class="lightbox-close" onclick="closeLightbox(event)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg>
     </button>
@@ -1754,6 +1762,9 @@ async function renderGallery(){
         <button type="button" class="photo-star${p.is_primary ? " active" : ""}" title="Set as primary photo" onclick="event.stopPropagation(); setPrimaryPhoto(${p.id})">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 21 12 17.77 5.82 21 7 14.14l-5-4.87 6.91-1.01L12 2z"/></svg>
         </button>
+        <button type="button" class="photo-save" title="Save a copy of this photo" onclick="event.stopPropagation(); savePhotoCopy(${p.id})">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+        </button>
         <button type="button" class="photo-del" title="Delete photo" onclick="event.stopPropagation(); openDeletePhotoModal(${p.id})">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
         </button>
@@ -1917,6 +1928,17 @@ async function refreshPhotosFromResult(r){
   renderGallery();
   await loadFirearms();
   if (r.warning) showToast(r.warning);
+}
+
+async function savePhotoCopy(photoId){
+  if (!api()) return;
+  const r = await api().save_photo_copy(photoId);
+  if (!r || !r.ok){
+    showToast((r && r.error) || "Couldn't save a copy of the photo.");
+    return;
+  }
+  if (r.cancelled) return;
+  showToast(`Saved a copy to ${r.path}`, true);
 }
 
 function openAddPhotoModal(){

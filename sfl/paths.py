@@ -23,6 +23,20 @@ def app_dir() -> str:
     return os.path.dirname(os.path.abspath(sys.argv[0]))
 
 
+def downloads_dir() -> str:
+    """Return the user's Downloads folder when it is available."""
+    try:
+        from PySide6.QtCore import QStandardPaths
+
+        directory = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DownloadLocation)
+        if directory and os.path.isdir(directory):
+            return directory
+    except Exception:
+        pass
+    directory = os.path.expanduser("~/Downloads")
+    return directory if os.path.isdir(directory) else ""
+
+
 def sanitize_filename(name: str) -> str:
     """Strip characters that Windows doesn't allow in file names."""
     cleaned = "".join(c for c in name if c not in _INVALID_FILENAME_CHARS)
