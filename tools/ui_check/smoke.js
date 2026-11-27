@@ -85,6 +85,11 @@ export default async function smoke(helpers) {
 
   // g) error path, then core workflow: add a firearm.
   const listBefore = await evaluate("api().list_firearms()");
+  const ownedIn = r => (r && r.firearms || []).filter(f => f.disposition_status === "Owned").length;
+  const counterNum = "document.querySelector('#ownedCounter .oc-num') ? document.querySelector('#ownedCounter .oc-num').textContent : ''";
+  const counterBefore = await evaluate(counterNum);
+  check("the owned counter shows the owned total", counterBefore === String(ownedIn(listBefore)),
+    `${counterBefore} vs ${ownedIn(listBefore)}`);
   await click("button[onclick='showListView()']");
   await click("button[onclick='openAddFirearmModal()']");
   await waitFor("document.getElementById('firearmModalScrim').classList.contains('open')", 5000);
@@ -105,6 +110,9 @@ export default async function smoke(helpers) {
   const count = r => (r && (r.firearms || r.items || [])).length;
   check("one firearm was added", count(listAfter) === count(listBefore) + 1,
     `${count(listBefore)} -> ${count(listAfter)}`);
+  const counterUp = await waitFor(`(${counterNum}) === '${ownedIn(listBefore) + 1}'`, 5000)
+    .then(() => true).catch(() => false);
+  check("the owned counter goes up by one after an add", counterUp, await evaluate(counterNum));
 
   // h) theme round trip, screenshot of each, confirmed saved through Python.
   for (let i = 0; i < 2; i++) {
