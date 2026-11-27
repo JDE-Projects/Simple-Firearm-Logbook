@@ -14,6 +14,11 @@
       "fixture": "tools/ui_check/fixture_detail_step.py",
       "timeout_s": 120
     },
+    "photo-step": {
+      "script": "tools/ui_check/photo_step.js",
+      "fixture": "tools/ui_check/fixture_photo_step.py",
+      "timeout_s": 120
+    },
     "photo-drop": {
       "script": "tools/ui_check/photo_drop.js",
       "fixture": "tools/ui_check/fixture_photo_drop.py",

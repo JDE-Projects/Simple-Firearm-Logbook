@@ -257,11 +257,33 @@ table.fw-table tbody tr.disposed-row:hover { opacity:.85; }
 }
 
 /* ---- lightbox ---- */
-.lightbox-scrim { position:fixed; inset:0; background:rgba(0,0,0,.8); z-index:95; display:none; align-items:center; justify-content:center; }
+.lightbox-scrim {
+  position:fixed; inset:0; background:rgba(0,0,0,.8); z-index:95; display:none;
+  flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:64px 72px 18px;
+}
 .lightbox-scrim.open { display:flex; }
-.lightbox-scrim img { max-width:90vw; max-height:88vh; border-radius:8px; box-shadow:0 20px 60px rgba(0,0,0,.5); }
+.lightbox-scrim [hidden] { display:none !important; }
+.lightbox-stage { display:flex; min-height:0; max-width:100%; border-radius:8px; }
+.lightbox-stage img { display:block; margin:auto; max-width:100%; max-height:calc(100vh - 64px - 18px - 12px - 28px); border-radius:8px; box-shadow:0 20px 60px rgba(0,0,0,.5); }
+.lightbox-scrim.zoomed .lightbox-stage { flex:1 1 auto; width:100%; overflow:auto; cursor:grab; }
+.lightbox-scrim.zoomed .lightbox-stage.dragging { cursor:grabbing; }
+.lightbox-scrim.zoomed .lightbox-stage img { flex:0 0 auto; max-width:none; max-height:none; }
+.lightbox-error { margin:auto; max-width:100%; color:#fff; font-size:13px; text-align:center; }
+.lightbox-controls { align-self:stretch; flex:0 0 auto; position:relative; display:flex; justify-content:center; align-items:center; gap:12px; min-height:28px; }
+.lightbox-view-btn {
+  font-family:"Sora", sans-serif; font-size:12px; font-weight:500; padding:5px 10px; border-radius:7px;
+  background:rgba(255,255,255,.08); color:#fff; border:1px solid rgba(255,255,255,.3); cursor:pointer;
+  display:inline-flex; align-items:center; justify-content:center; gap:4px; transition:.15s;
+}
+.lightbox-view-btn:hover { border-color:var(--accent); transform:translateY(-1px); }
+.lightbox-view-btn svg { width:12px; height:12px; display:block; }
+.lightbox-count { min-width:50px; text-align:center; font-family:"JetBrains Mono", monospace; font-size:11.5px; color:rgba(255,255,255,.8); }
+.lightbox-zoom { position:absolute; right:0; top:50%; transform:translateY(-50%); gap:5px; }
+.lightbox-zoom:hover { transform:translateY(calc(-50% - 1px)); }
+.lightbox-zoom svg { width:13px; height:13px; }
 .lightbox-close { position:absolute; top:18px; right:22px; width:36px; height:36px; border-radius:8px; border:1px solid rgba(255,255,255,.3);
-  background:rgba(255,255,255,.08); color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  background:rgba(255,255,255,.08); color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:.15s; }
+.lightbox-close:hover { border-color:var(--accent); transform:translateY(-1px); }
 .lightbox-close svg { width:16px; height:16px; }
 
 /* ---- forms ---- */
@@ -559,7 +581,22 @@ table.import-preview-table tbody tr.row-error { opacity:.65; }
     <button class="lightbox-close" onclick="closeLightbox(event)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></svg>
     </button>
-    <img id="lightboxImg" src="" alt="Photo" onclick="event.stopPropagation()">
+    <div class="lightbox-stage" id="lightboxStage" onclick="event.stopPropagation()">
+      <img id="lightboxImg" src="" alt="Photo">
+      <div class="lightbox-error" id="lightboxError" hidden></div>
+    </div>
+    <div class="lightbox-controls" onclick="event.stopPropagation()">
+      <button type="button" class="lightbox-view-btn" id="lightboxPrevious" title="Previous photo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        Previous
+      </button>
+      <span class="lightbox-count" id="lightboxCount"></span>
+      <button type="button" class="lightbox-view-btn" id="lightboxNext" title="Next photo">
+        Next
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+      <button type="button" class="lightbox-view-btn lightbox-zoom" id="lightboxZoom" title="Show at actual size"></button>
+    </div>
   </div>
 
   <!-- add/edit firearm modal -->
@@ -1727,19 +1764,126 @@ async function loadPhotoThumb(p){
   const img = document.createElement("img");
   img.src = r.data_uri;
   img.alt = "Photo";
-  img.onclick = () => openLightbox(r.data_uri);
+  img.onclick = () => openLightbox(p.id);
   thumb.insertBefore(img, thumb.firstChild);
 }
 
-function openLightbox(dataUri){
-  $("lightboxImg").src = dataUri;
+const lightboxZoomIn = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/><path d="M11 8v6M8 11h6"/></svg>Actual size';
+const lightboxZoomOut = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/><path d="M8 11h6"/></svg>Fit';
+let lightboxPhotoIndex = -1;
+let lightboxRequest = 0;
+let lightboxDrag = null;
+let lightboxDragEnded = false; // a drag released over the backdrop must not count as a click that closes the view
+
+function lightboxActualWidth(){
+  return $("lightboxImg").naturalWidth / (window.devicePixelRatio || 1);
+}
+function updateLightboxZoomButton(){
+  const img = $("lightboxImg");
+  const zoom = $("lightboxZoom");
+  const zoomed = $("lightboxScrim").classList.contains("zoomed");
+  if (zoomed){
+    img.style.width = lightboxActualWidth() + "px";
+    zoom.hidden = false;
+    zoom.innerHTML = lightboxZoomOut;
+    zoom.title = "Fit to window";
+    return;
+  }
+  zoom.innerHTML = lightboxZoomIn;
+  zoom.title = "Show at actual size";
+  zoom.hidden = !img.naturalWidth || img.clientWidth >= lightboxActualWidth() - 1;
+}
+function setLightboxZoom(zoomed){
+  const scrim = $("lightboxScrim");
+  const stage = $("lightboxStage");
+  const img = $("lightboxImg");
+  if (zoomed && !img.naturalWidth) return;
+  scrim.classList.toggle("zoomed", zoomed);
+  img.style.width = zoomed ? lightboxActualWidth() + "px" : "";
+  updateLightboxZoomButton();
+  if (zoomed){
+    requestAnimationFrame(() => {
+      stage.scrollLeft = (stage.scrollWidth - stage.clientWidth) / 2;
+      stage.scrollTop = (stage.scrollHeight - stage.clientHeight) / 2;
+    });
+  }
+}
+function updateLightboxControls(){
+  const multiple = currentPhotos.length > 1;
+  $("lightboxPrevious").hidden = !multiple;
+  $("lightboxNext").hidden = !multiple;
+  $("lightboxCount").hidden = !multiple;
+  $("lightboxCount").textContent = (lightboxPhotoIndex + 1) + " of " + currentPhotos.length;
+}
+async function showLightboxPhoto(index){
+  if (!currentPhotos.length) return;
+  lightboxPhotoIndex = (index + currentPhotos.length) % currentPhotos.length;
+  const request = ++lightboxRequest;
+  const img = $("lightboxImg");
+  const error = $("lightboxError");
+  setLightboxZoom(false);
+  img.src = "";
+  img.hidden = true;
+  error.hidden = true;
+  error.textContent = "";
+  updateLightboxControls();
+  let result = null;
+  try { result = await api().get_photo_data(currentPhotos[lightboxPhotoIndex].filename); }
+  catch (err) { result = {ok:false, error:"Couldn't load this photo."}; }
+  if (request !== lightboxRequest || !$("lightboxScrim").classList.contains("open")) return;
+  if (!result || !result.ok){
+    error.textContent = (result && result.error) || "Couldn't load this photo.";
+    error.hidden = false;
+    return;
+  }
+  img.src = result.data_uri;
+  img.hidden = false;
+}
+function openLightbox(photoId){
+  const index = currentPhotos.findIndex(p => p.id === photoId);
+  if (index === -1) return;
   $("lightboxScrim").classList.add("open");
+  showLightboxPhoto(index);
 }
 function closeLightbox(e){
-  if (e) e.stopPropagation();
+  if (e && e.currentTarget === $("lightboxScrim") && (e.target !== $("lightboxScrim") || lightboxDragEnded)) return;
+  ++lightboxRequest;
+  lightboxDrag = null;
+  $("lightboxStage").classList.remove("dragging");
+  setLightboxZoom(false);
   $("lightboxScrim").classList.remove("open");
   $("lightboxImg").src = "";
+  $("lightboxImg").hidden = false;
+  $("lightboxError").textContent = "";
+  $("lightboxError").hidden = true;
+  lightboxPhotoIndex = -1;
 }
+$("lightboxImg").addEventListener("load", updateLightboxZoomButton);
+$("lightboxPrevious").onclick = () => showLightboxPhoto(lightboxPhotoIndex - 1);
+$("lightboxNext").onclick = () => showLightboxPhoto(lightboxPhotoIndex + 1);
+$("lightboxZoom").onclick = () => setLightboxZoom(!$("lightboxScrim").classList.contains("zoomed"));
+$("lightboxStage").addEventListener("mousedown", e => {
+  if (!$("lightboxScrim").classList.contains("zoomed") || e.button !== 0) return;
+  const stage = $("lightboxStage");
+  lightboxDrag = {x:e.clientX, y:e.clientY, left:stage.scrollLeft, top:stage.scrollTop};
+  stage.classList.add("dragging");
+  e.preventDefault();
+});
+window.addEventListener("mousemove", e => {
+  if (!lightboxDrag) return;
+  const stage = $("lightboxStage");
+  stage.scrollLeft = lightboxDrag.left - (e.clientX - lightboxDrag.x);
+  stage.scrollTop = lightboxDrag.top - (e.clientY - lightboxDrag.y);
+});
+window.addEventListener("mouseup", () => {
+  if (lightboxDrag){
+    lightboxDragEnded = true;
+    setTimeout(() => { lightboxDragEnded = false; }, 0);
+  }
+  lightboxDrag = null;
+  $("lightboxStage").classList.remove("dragging");
+});
+window.addEventListener("resize", updateLightboxZoomButton);
 
 async function addPhotos(){
   if (!api() || !currentFirearm) return;
