@@ -86,8 +86,9 @@ def build_setup_script(version: str) -> str:
     """Seed the backend-owned list and drive this page's render path.
 
     boot() only runs on the pywebviewready event, which never fires in a plain
-    browser. The backend normally fills FIREARMS before renderTable() runs, so
-    setup mirrors that path and also exposes the disposed sample row.
+    browser. The backend normally fills FIREARMS before renderOwnedCounter()
+    and renderTable() run, so setup mirrors that path and also exposes the
+    disposed sample row.
     """
     return (
         f"STATE.version = {json.dumps(version)};"
@@ -95,6 +96,7 @@ def build_setup_script(version: str) -> str:
         "showDisposed = true;"
         "document.getElementById('showDisposedToggle').checked = true;"
         f"document.getElementById('verLabel').textContent = 'v' + {json.dumps(version)};"
+        "if (typeof renderOwnedCounter === 'function') renderOwnedCounter();"
         "if (typeof renderTable === 'function') renderTable();"
     )
 

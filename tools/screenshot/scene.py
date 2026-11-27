@@ -2,7 +2,7 @@
 """The invented firearm collection shown in the README screenshot.
 
 None of this is real inventory or personal data. The version shown in the
-image always comes from simple_firearm_logbook.py, never from this fixture.
+image always comes from sfl/config.py, never from this fixture.
 """
 
 

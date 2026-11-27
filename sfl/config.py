@@ -2,7 +2,7 @@
 file and folder names, schema version, and the fixed vocabularies used by
 firearms, photo/document validation, CSV export, and CSV import."""
 
-APP_VERSION = "1.9.2"
+APP_VERSION = "1.10.0"
 GITHUB_OWNER = "JDE-Projects"
 GITHUB_REPO = "Simple-Firearm-Logbook"
 
