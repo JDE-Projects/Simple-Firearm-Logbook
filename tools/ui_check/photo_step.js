@@ -25,7 +25,11 @@ export default async function photoStep(helpers) {
     const selector = row(id);
     await waitFor(`document.querySelector('${selector}') !== null`, 10000);
     await click(selector);
-    await waitFor(`document.querySelectorAll('.photo-thumb').length === ${photoCount}`, 10000);
+    // Each thumbnail shows "Loading..." until its image arrives (or "Missing"
+    // if its file is gone), so wait for every one to finish before anything
+    // clicks one.
+    await waitFor(`document.querySelectorAll('.photo-thumb').length === ${photoCount}
+      && ![...document.querySelectorAll('.photo-thumb .ph-loading')].some(e => e.textContent === 'Loading...')`, 10000);
   }
 
   async function showPhoto(index) {
